@@ -1,0 +1,181 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp_hubspot_connector"
+version = "0.1.0"
+description = "MCP HubSpot Connector - A Python connector for HubSpot CRM integration"
+authors = [
+    {name = "IdeaBosque", email = "ideabosque@gmail.com"}
+]
+maintainers = [
+    {name = "IdeaBosque", email = "ideabosque@gmail.com"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+keywords = ["hubspot", "crm", "connector", "mcp", "api"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Office/Business :: Financial :: Point-Of-Sale",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "hubspot-api-client>=12.0.0",
+    "python-dotenv>=0.19.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-mock>=3.6.1",
+    "pytest-cov>=4.0.0",
+    "pytest-xdist>=3.0.0",
+    "responses>=0.23.0",
+]
+dev = [
+    "black>=22.0.0",
+    "flake8>=5.0.0",
+    "mypy>=1.0.0",
+    "pre-commit>=2.20.0",
+]
+all = [
+    "mcp_hubspot_connector[test,dev]"
+]
+
+[project.urls]
+Homepage = "https://github.com/bibow/mcp_hubspot_connector"
+Repository = "https://github.com/bibow/mcp_hubspot_connector"
+Issues = "https://github.com/bibow/mcp_hubspot_connector/issues"
+Documentation = "https://github.com/bibow/mcp_hubspot_connector#readme"
+
+[tool.setuptools]
+packages = ["mcp_hubspot_connector"]
+
+[tool.setuptools.package-dir]
+mcp_hubspot_connector = "mcp_hubspot_connector/mcp_hubspot_connector"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = ["mcp_hubspot_connector/tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+    "--tb=short",
+    "--durations=10",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests requiring real API",
+    "unit: marks tests as unit tests with mocks",
+    "parametrize: marks parametrized tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning"
+]
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(name)s: %(message)s"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "hubspot.*",
+    "dotenv.*",
+]
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["mcp_hubspot_connector"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "setup.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+show_missing = true
+precision = 2
+
+[tool.flake8]
+max-line-length = 100
+extend-ignore = [
+    "E203",  # whitespace before ':'
+    "E501",  # line too long (handled by black)
+    "W503",  # line break before binary operator
+]
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".venv",
+    ".pytest_cache",
+]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["mcp_hubspot_connector"]
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
