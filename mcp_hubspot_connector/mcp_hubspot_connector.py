@@ -110,8 +110,6 @@ class HubSpotSDKConfig:
     calls_per_second: int = 10
 
 
-
-
 class RateLimiter:
     """Rate limiter for HubSpot API calls"""
 
@@ -684,7 +682,7 @@ class AnalyticsEngine:
 
         for i, campaign in enumerate(campaigns_data):
             stats = campaign_stats[i] if i < len(campaign_stats) else {}
-            campaign_id = str(campaign.id if hasattr(campaign, "id") else campaign.get("id", ""))
+            campaign_id = campaign.object_id
 
             # Basic metrics
             sent = stats.get("sent", 1)
@@ -1327,11 +1325,19 @@ class AnalyticsEngine:
         elif benchmark_type == "historical":
             # Would compare against historical data
             summary = performance_analysis["summary"]
-            return {
-                "historical_open_rate": summary["avg_open_rate"] * 0.95,  # Simulate historical
-                "historical_click_rate": summary["avg_click_rate"] * 0.98,
-                "historical_bounce_rate": summary["avg_bounce_rate"] * 1.02,
-            }
+            historical_benchmarks = {}
+            
+            # Only include metrics that are actually calculated
+            if "avg_open_rate" in summary:
+                historical_benchmarks["historical_open_rate"] = summary["avg_open_rate"] * 0.95
+            if "avg_click_rate" in summary:
+                historical_benchmarks["historical_click_rate"] = summary["avg_click_rate"] * 0.98
+            if "avg_bounce_rate" in summary:
+                historical_benchmarks["historical_bounce_rate"] = summary["avg_bounce_rate"] * 1.02
+            if "avg_conversion_rate" in summary:
+                historical_benchmarks["historical_conversion_rate"] = summary["avg_conversion_rate"] * 0.90
+                
+            return historical_benchmarks
         else:
             return industry_benchmarks
 
@@ -1568,8 +1574,14 @@ class AnalyticsEngine:
                     ),
                 }
 
-        # Enhanced insights with engagement data
+        # Analysis type-specific insights and focus areas
         insights = []
+        avg_engagement_score = float(df["contact_engagement_score"].mean())
+        high_engagement_deals = len(df[df["has_high_engagement"] == True])
+        deals_with_sales_interactions = len(df[df["has_sales_interactions"] == True])
+        recently_engaged_deals = len(df[df["is_recently_engaged"] == True])
+
+        # Base insights that apply to all analysis types
         if conversion_rate < 0.2:
             insights.append(
                 f"Low conversion rate: {conversion_rate:.1%} - consider pipeline optimization"
@@ -1577,20 +1589,55 @@ class AnalyticsEngine:
         if avg_deal_size < 1000:
             insights.append("Average deal size is low - focus on upselling opportunities")
 
-        # Engagement-specific insights
-        avg_engagement_score = float(df["contact_engagement_score"].mean())
-        high_engagement_deals = len(df[df["has_high_engagement"] == True])
-        deals_with_sales_interactions = len(df[df["has_sales_interactions"] == True])
-        recently_engaged_deals = len(df[df["is_recently_engaged"] == True])
-
-        if avg_engagement_score > 15:
-            insights.append("Strong overall engagement levels indicate good lead quality")
-        if high_engagement_deals / deal_count > 0.3:
-            insights.append("High percentage of deals have strong engagement - good qualification")
-        if deals_with_sales_interactions / deal_count < 0.2:
-            insights.append("Low sales interaction rate - consider more direct outreach")
-        if recently_engaged_deals / deal_count < 0.4:
-            insights.append("Many deals lack recent engagement - implement re-engagement campaigns")
+        # Analysis type-specific insights
+        if analysis_type == "conversion_rates":
+            # Focus on conversion optimization
+            if high_engagement_deals / deal_count > 0.3:
+                insights.append("High percentage of deals have strong engagement - good qualification")
+            if deals_with_sales_interactions / deal_count < 0.2:
+                insights.append("Low sales interaction rate - consider more direct outreach")
+            # Add conversion-specific metrics analysis
+            if conversion_rate > 0.25:
+                insights.append("Excellent conversion rate - current process is working well")
+            elif conversion_rate > 0.15:
+                insights.append("Good conversion rate - minor optimizations could boost performance")
+                
+        elif analysis_type == "engagement_analysis":
+            # Focus on engagement metrics
+            if avg_engagement_score > 15:
+                insights.append("Strong overall engagement levels indicate good lead quality")
+            if recently_engaged_deals / deal_count < 0.4:
+                insights.append("Many deals lack recent engagement - implement re-engagement campaigns")
+            # Add engagement-specific insights
+            avg_velocity = float(df["avg_engagement_velocity"].mean())
+            if avg_velocity > 1.0:
+                insights.append("High engagement velocity indicates active prospects")
+            elif avg_velocity < 0.3:
+                insights.append("Low engagement velocity - consider nurturing campaigns")
+                
+        elif analysis_type == "deal_velocity":
+            # Focus on deal progression speed
+            velocity_metrics = self._calculate_pipeline_velocity(df, closed_won_count)
+            if velocity_metrics.get("avg_days_to_close", 0) > 90:
+                insights.append("Long sales cycle detected - consider process acceleration")
+            if velocity_metrics.get("avg_days_to_close", 0) < 30:
+                insights.append("Fast sales cycle - excellent deal velocity")
+                
+        elif analysis_type == "stage_analysis":
+            # Focus on stage-specific metrics
+            stage_counts = df["stage"].value_counts()
+            if len(stage_counts) > 0:
+                bottleneck_stage = stage_counts.idxmax()
+                bottleneck_count = stage_counts.max()
+                if bottleneck_count > deal_count * 0.4:
+                    insights.append(f"Bottleneck detected at '{bottleneck_stage}' stage - {bottleneck_count} deals")
+                    
+        else:
+            # Default comprehensive analysis
+            if avg_engagement_score > 15:
+                insights.append("Strong overall engagement levels indicate good lead quality")
+            if recently_engaged_deals / deal_count < 0.4:
+                insights.append("Many deals lack recent engagement - implement re-engagement campaigns")
 
         # Calculate actual velocity metrics
         velocity_metrics = self._calculate_pipeline_velocity(df, closed_won_count)
@@ -1639,6 +1686,7 @@ class AnalyticsEngine:
             "insights": insights,
             "velocity_metrics": velocity_metrics,
             "engagement_insights": engagement_insights,
+            "analysis_type": analysis_type,  # Document which analysis type was used
             "pipeline_health": {
                 "engagement_score": avg_engagement_score,
                 "sales_interaction_rate": (
@@ -2681,7 +2729,7 @@ class MCPHubspotConnector:
                     "data_source": "hubspot_sdk",
                     "sdk_version": "7.0.0",
                 },
-                "error_message": None
+                "error_message": None,
             }
 
         except Exception as e:
@@ -2691,7 +2739,7 @@ class MCPHubspotConnector:
                 "insights": [],
                 "recommendations": [],
                 "metadata": {},
-                "error_message": f"Contact analytics failed: {str(e)}"
+                "error_message": f"Contact analytics failed: {str(e)}",
             }
 
     async def _get_contacts_with_sdk(
@@ -2770,13 +2818,10 @@ class MCPHubspotConnector:
                     batch_limit = min(100, limit - total_fetched)
 
                     await self.rate_limiter.wait_if_needed()
-                    
+
                     # Use basic_api.get_page() for proper pagination
                     get_page_response = contacts_api.basic_api.get_page(
-                        limit=batch_limit,
-                        after=after,
-                        properties=properties,
-                        archived=False
+                        limit=batch_limit, after=after, properties=properties, archived=False
                     )
 
                     if get_page_response and get_page_response.results:
@@ -2784,10 +2829,12 @@ class MCPHubspotConnector:
                         total_fetched += len(get_page_response.results)
 
                         # Check for next page
-                        if (hasattr(get_page_response, 'paging') and 
-                            get_page_response.paging and 
-                            hasattr(get_page_response.paging, 'next') and 
-                            get_page_response.paging.next):
+                        if (
+                            hasattr(get_page_response, "paging")
+                            and get_page_response.paging
+                            and hasattr(get_page_response.paging, "next")
+                            and get_page_response.paging.next
+                        ):
                             after = get_page_response.paging.next.after
                         else:
                             break
@@ -2826,6 +2873,41 @@ class MCPHubspotConnector:
 
         return engagement_data
 
+    async def _get_campaign_engagement_data_with_sdk(self, campaign_ids: List[str]) -> List[Dict[str, Any]]:
+        """Get campaign engagement data using HubSpot SDK
+        
+        This is a placeholder method that returns mock engagement data for campaigns.
+        In a full implementation, this would use HubSpot's engagement API endpoints
+        to get actual email opens, clicks, and other engagement events for campaigns.
+        """
+        
+        engagement_data = []
+        
+        # For each campaign, generate mock engagement data
+        for campaign_id in campaign_ids:
+            # Mock engagement events for this campaign
+            # In real implementation, this would query HubSpot's engagement endpoints
+            for i in range(5):  # Mock 5 contacts per campaign
+                mock_events = [
+                    {
+                        "campaign_id": campaign_id,
+                        "contact_id": f"contact_{i}",
+                        "type": "email_open",
+                        "timestamp": datetime.now().isoformat(),
+                        "event_id": f"event_{campaign_id}_{i}",
+                    },
+                    {
+                        "campaign_id": campaign_id,
+                        "contact_id": f"contact_{i}",
+                        "type": "email_click", 
+                        "timestamp": datetime.now().isoformat(),
+                        "event_id": f"event_{campaign_id}_{i}_click",
+                    },
+                ]
+                engagement_data.extend(mock_events)
+        
+        return engagement_data
+
     def get_contacts(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Get contacts from HubSpot."""
         try:
@@ -2846,10 +2928,7 @@ class MCPHubspotConnector:
 
             while total_fetched < limit:
                 response = client.crm.contacts.basic_api.get_page(
-                    limit=batch_limit,
-                    after=after,
-                    properties=properties,
-                    archived=False
+                    limit=batch_limit, after=after, properties=properties, archived=False
                 )
 
                 if response and response.results:
@@ -2861,11 +2940,13 @@ class MCPHubspotConnector:
                         total_fetched += 1
 
                     # Check for next page
-                    if (hasattr(response, 'paging') and 
-                        response.paging and 
-                        hasattr(response.paging, 'next') and 
-                        response.paging.next and
-                        total_fetched < limit):
+                    if (
+                        hasattr(response, "paging")
+                        and response.paging
+                        and hasattr(response.paging, "next")
+                        and response.paging.next
+                        and total_fetched < limit
+                    ):
                         after = response.paging.next.after
                     else:
                         break
@@ -2967,10 +3048,7 @@ class MCPHubspotConnector:
 
             while total_fetched < limit:
                 response = client.crm.deals.basic_api.get_page(
-                    limit=batch_limit,
-                    after=after,
-                    properties=properties,
-                    archived=False
+                    limit=batch_limit, after=after, properties=properties, archived=False
                 )
 
                 if response and response.results:
@@ -2982,11 +3060,13 @@ class MCPHubspotConnector:
                         total_fetched += 1
 
                     # Check for next page
-                    if (hasattr(response, 'paging') and 
-                        response.paging and 
-                        hasattr(response.paging, 'next') and 
-                        response.paging.next and
-                        total_fetched < limit):
+                    if (
+                        hasattr(response, "paging")
+                        and response.paging
+                        and hasattr(response.paging, "next")
+                        and response.paging.next
+                        and total_fetched < limit
+                    ):
                         after = response.paging.next.after
                     else:
                         break
@@ -3054,10 +3134,7 @@ class MCPHubspotConnector:
 
             while total_fetched < limit:
                 response = client.crm.companies.basic_api.get_page(
-                    limit=batch_limit,
-                    after=after,
-                    properties=properties,
-                    archived=False
+                    limit=batch_limit, after=after, properties=properties, archived=False
                 )
 
                 if response and response.results:
@@ -3069,11 +3146,13 @@ class MCPHubspotConnector:
                         total_fetched += 1
 
                     # Check for next page
-                    if (hasattr(response, 'paging') and 
-                        response.paging and 
-                        hasattr(response.paging, 'next') and 
-                        response.paging.next and
-                        total_fetched < limit):
+                    if (
+                        hasattr(response, "paging")
+                        and response.paging
+                        and hasattr(response.paging, "next")
+                        and response.paging.next
+                        and total_fetched < limit
+                    ):
                         after = response.paging.next.after
                     else:
                         break
@@ -3208,10 +3287,9 @@ class MCPHubspotConnector:
             while total_fetched < limit:
                 try:
                     # Try get_page method first (if available)
-                    if hasattr(marketing_events_api.basic_api, 'get_page'):
+                    if hasattr(marketing_events_api.basic_api, "get_page"):
                         response = marketing_events_api.basic_api.get_page(
-                            limit=batch_limit,
-                            after=after
+                            limit=batch_limit, after=after
                         )
                     else:
                         # Fallback to get_all method
@@ -3235,18 +3313,22 @@ class MCPHubspotConnector:
                             "start_date_time": self._format_datetime(
                                 getattr(event, "start_date_time", "")
                             ),
-                            "end_date_time": self._format_datetime(getattr(event, "end_date_time", "")),
+                            "end_date_time": self._format_datetime(
+                                getattr(event, "end_date_time", "")
+                            ),
                         }
                         events.append(event_data)
                         total_fetched += 1
 
                     # Check for next page (if pagination is supported)
-                    if (hasattr(response, 'paging') and 
-                        response.paging and 
-                        hasattr(response.paging, 'next') and 
-                        response.paging.next and
-                        total_fetched < limit and
-                        hasattr(marketing_events_api.basic_api, 'get_page')):
+                    if (
+                        hasattr(response, "paging")
+                        and response.paging
+                        and hasattr(response.paging, "next")
+                        and response.paging.next
+                        and total_fetched < limit
+                        and hasattr(marketing_events_api.basic_api, "get_page")
+                    ):
                         after = response.paging.next.after
                     else:
                         break
@@ -3287,9 +3369,60 @@ class MCPHubspotConnector:
             metrics = params.get("metrics", ["open_rate", "click_rate", "conversion_rate"])
             benchmark_type = params.get("benchmarkType", "historical")
             include_recommendations = params.get("includeRecommendations", True)
+            date_range = params.get("dateRange", {})
 
             # Get campaign data using SDK
             campaigns_data = await self._get_campaigns_with_sdk(campaign_ids)
+
+            # Apply date range filtering if provided
+            if date_range and campaigns_data:
+                filtered_campaigns = []
+                start_date = date_range.get("start")
+                end_date = date_range.get("end")
+                
+                if start_date or end_date:
+                    import pandas as pd
+                    
+                    for campaign in campaigns_data:
+                        # Check if campaign has date fields to filter on
+                        campaign_date = None
+                        if hasattr(campaign, 'start_date_time'):
+                            campaign_date = getattr(campaign, 'start_date_time')
+                        elif hasattr(campaign, 'created_at'):
+                            campaign_date = getattr(campaign, 'created_at')
+                        elif hasattr(campaign, 'createdate'):
+                            campaign_date = getattr(campaign, 'createdate')
+                        
+                        if campaign_date:
+                            try:
+                                campaign_dt = pd.to_datetime(campaign_date)
+                                include_campaign = True
+                                
+                                if start_date:
+                                    start_dt = pd.to_datetime(start_date)
+                                    if campaign_dt < start_dt:
+                                        include_campaign = False
+                                        
+                                if end_date and include_campaign:
+                                    end_dt = pd.to_datetime(end_date)
+                                    if campaign_dt > end_dt:
+                                        include_campaign = False
+                                        
+                                if include_campaign:
+                                    filtered_campaigns.append(campaign)
+                            except:
+                                # If date parsing fails, include the campaign
+                                filtered_campaigns.append(campaign)
+                        else:
+                            # If no date field found, include the campaign
+                            filtered_campaigns.append(campaign)
+                    
+                    campaigns_data = filtered_campaigns
+                    # Update campaign_ids to match filtered campaigns
+                    if hasattr(campaigns_data[0], 'id') if campaigns_data else False:
+                        campaign_ids = [campaign.id for campaign in campaigns_data]
+                    elif hasattr(campaigns_data[0], 'object_id') if campaigns_data else False:
+                        campaign_ids = [campaign.object_id for campaign in campaigns_data]
 
             # Get detailed campaign statistics
             campaign_stats = await self._get_campaign_stats_with_sdk(campaign_ids)
@@ -3331,18 +3464,21 @@ class MCPHubspotConnector:
                     "campaigns_analyzed": len(campaigns_data),
                     "benchmark_type": benchmark_type,
                     "data_source": "hubspot_sdk_marketing",
+                    "date_range_applied": date_range if date_range else None,
+                    "date_filtering_enabled": bool(date_range and (date_range.get("start") or date_range.get("end"))),
                 },
-                "error_message": None
+                "error_message": None,
             }
 
         except Exception as e:
+            log = traceback.format_exc()
             return {
                 "success": False,
                 "data": None,
                 "insights": [],
                 "recommendations": [],
                 "metadata": {},
-                "error_message": f"Campaign analysis failed: {str(e)}"
+                "error_message": f"Campaign analysis failed: {str(e)}\n{log}",
             }
 
     def _format_datetime(self, dt_value):
@@ -3404,12 +3540,23 @@ class MCPHubspotConnector:
 
                 while True:
                     await self.rate_limiter.wait_if_needed()
-                    response = marketing_events_api.basic_api.get_page(limit=100, after=after)
+
+                    # Marketing events API uses get_all for pagination, not get_page
+                    if after:
+                        response = marketing_events_api.basic_api.get_all(limit=100, after=after)
+                    else:
+                        response = marketing_events_api.basic_api.get_all(limit=100)
 
                     if response and response.results:
                         campaigns.extend(response.results)
 
-                    if response.paging and response.paging.next:
+                    # Check for next page using paging info
+                    if (
+                        hasattr(response, "paging")
+                        and response.paging
+                        and hasattr(response.paging, "next")
+                        and response.paging.next
+                    ):
                         after = response.paging.next.after
                     else:
                         break
@@ -3502,7 +3649,7 @@ class MCPHubspotConnector:
                     "analysis_type": analysis_type,
                     "data_source": "hubspot_sdk_deals",
                 },
-                "error_message": None
+                "error_message": None,
             }
 
         except Exception as e:
@@ -3512,7 +3659,7 @@ class MCPHubspotConnector:
                 "insights": [],
                 "recommendations": [],
                 "metadata": {},
-                "error_message": f"Pipeline analysis failed: {str(e)}"
+                "error_message": f"Pipeline analysis failed: {str(e)}",
             }
 
     async def _get_deals_with_sdk(
@@ -3587,19 +3734,18 @@ class MCPHubspotConnector:
             while True:
                 await self.rate_limiter.wait_if_needed()
                 response = deals_api.basic_api.get_page(
-                    limit=100,
-                    after=after,
-                    properties=properties,
-                    archived=False
+                    limit=100, after=after, properties=properties, archived=False
                 )
 
                 if response and response.results:
                     all_deals.extend(response.results)
 
-                if (hasattr(response, 'paging') and 
-                    response.paging and 
-                    hasattr(response.paging, 'next') and 
-                    response.paging.next):
+                if (
+                    hasattr(response, "paging")
+                    and response.paging
+                    and hasattr(response.paging, "next")
+                    and response.paging.next
+                ):
                     after = response.paging.next.after
                 else:
                     break
@@ -3657,7 +3803,7 @@ class MCPHubspotConnector:
                     "model_accuracy": prediction_result["accuracy"],
                     "data_source": "hubspot_sdk_multi_api",
                 },
-                "error_message": None
+                "error_message": None,
             }
 
         except Exception as e:
@@ -3667,7 +3813,7 @@ class MCPHubspotConnector:
                 "insights": [],
                 "recommendations": [],
                 "metadata": {},
-                "error_message": f"Lead scoring failed: {str(e)}"
+                "error_message": f"Lead scoring failed: {str(e)}",
             }
 
     async def _get_contacts_by_ids_with_sdk(self, contact_ids: List[str]) -> List[Any]:
@@ -3736,11 +3882,20 @@ class MCPHubspotConnector:
     async def export_campaign_performance(self, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """Export function for campaign performance analysis"""
         if params is None:
+            # Default to last 6 months of campaign data
+            from datetime import datetime, timedelta
+            now = datetime.utcnow()
+            six_months_ago = now - timedelta(days=180)
+            
             params = {
                 "campaignIds": [],  # Will get all campaigns
                 "metrics": ["open_rate", "click_rate", "conversion_rate"],
                 "benchmarkType": "industry",
                 "includeRecommendations": True,
+                "dateRange": {
+                    "start": six_months_ago.isoformat() + "Z",
+                    "end": now.isoformat() + "Z"
+                }
             }
         return await self.analyze_campaign_performance(params)
 
