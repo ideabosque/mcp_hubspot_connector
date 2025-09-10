@@ -110,16 +110,6 @@ class HubSpotSDKConfig:
     calls_per_second: int = 10
 
 
-@dataclass
-class MCPToolResult:
-    """Standardized result format for MCP tools"""
-
-    success: bool
-    data: Any
-    insights: List[str] = None
-    recommendations: List[str] = None
-    metadata: Dict[str, Any] = None
-    error_message: str = None
 
 
 class RateLimiter:
@@ -2650,7 +2640,7 @@ class MCPHubspotConnector:
         self.cache_timestamps = {}
 
     @handle_hubspot_errors
-    async def get_contact_analytics(self, params: Dict[str, Any]) -> MCPToolResult:
+    async def get_contact_analytics(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: get_contact_analytics - Advanced contact analytics using SDK"""
         try:
             date_range = params.get("dateRange", {})
@@ -2675,30 +2665,34 @@ class MCPHubspotConnector:
             # Generate business insights
             insights = await self.insight_generator.generate_contact_insights(analytics_result)
 
-            return MCPToolResult(
-                success=True,
-                data={
+            return {
+                "success": True,
+                "data": {
                     "totalContacts": len(contacts_data),
                     "activeContacts": analytics_result["active_count"],
                     "avgEngagementScore": analytics_result["avg_engagement"],
                     "segments": analytics_result["segments"],
                     "detailedMetrics": analytics_result["detailed_metrics"],
                 },
-                insights=[i["message"] for i in insights],
-                recommendations=[i["action"] for i in insights if i.get("action")],
-                metadata={
+                "insights": [i["message"] for i in insights],
+                "recommendations": [i["action"] for i in insights if i.get("action")],
+                "metadata": {
                     "processing_time": analytics_result["processing_time"],
                     "data_source": "hubspot_sdk",
                     "sdk_version": "7.0.0",
                 },
-            )
+                "error_message": None
+            }
 
         except Exception as e:
-            return MCPToolResult(
-                success=False,
-                data=None,
-                error_message=f"Contact analytics failed: {str(e)}",
-            )
+            return {
+                "success": False,
+                "data": None,
+                "insights": [],
+                "recommendations": [],
+                "metadata": {},
+                "error_message": f"Contact analytics failed: {str(e)}"
+            }
 
     async def _get_contacts_with_sdk(
         self, limit: int, date_range: Dict[str, str] = None
@@ -3286,7 +3280,7 @@ class MCPHubspotConnector:
             return f"HubSpot API connection failed: {str(e)}"
 
     @handle_hubspot_errors
-    async def analyze_campaign_performance(self, params: Dict[str, Any]) -> MCPToolResult:
+    async def analyze_campaign_performance(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: analyze_campaign_performance - Campaign analytics using SDK"""
         try:
             campaign_ids = params.get("campaignIds", [])
@@ -3322,30 +3316,34 @@ class MCPHubspotConnector:
                     performance_analysis, benchmarks
                 )
 
-            return MCPToolResult(
-                success=True,
-                data={
+            return {
+                "success": True,
+                "data": {
                     "campaigns": performance_analysis["campaign_metrics"],
                     "summary_metrics": performance_analysis["summary"],
                     "benchmarks": benchmarks,
                     "performance_trends": performance_analysis["trends"],
                 },
-                insights=performance_analysis["insights"],
-                recommendations=[r["action"] for r in recommendations],
-                metadata={
+                "insights": performance_analysis["insights"],
+                "recommendations": [r["action"] for r in recommendations],
+                "metadata": {
                     "analysis_date": datetime.now().isoformat(),
                     "campaigns_analyzed": len(campaigns_data),
                     "benchmark_type": benchmark_type,
                     "data_source": "hubspot_sdk_marketing",
                 },
-            )
+                "error_message": None
+            }
 
         except Exception as e:
-            return MCPToolResult(
-                success=False,
-                data=None,
-                error_message=f"Campaign analysis failed: {str(e)}",
-            )
+            return {
+                "success": False,
+                "data": None,
+                "insights": [],
+                "recommendations": [],
+                "metadata": {},
+                "error_message": f"Campaign analysis failed: {str(e)}"
+            }
 
     def _format_datetime(self, dt_value):
         """Format datetime values to ISO format strings with proper error handling"""
@@ -3454,7 +3452,7 @@ class MCPHubspotConnector:
         return stats
 
     @handle_hubspot_errors
-    async def analyze_sales_pipeline(self, params: Dict[str, Any]) -> MCPToolResult:
+    async def analyze_sales_pipeline(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: analyze_sales_pipeline - Sales pipeline analytics using SDK"""
         try:
             pipeline_ids = params.get("pipelineIds", [])
@@ -3489,29 +3487,33 @@ class MCPHubspotConnector:
                     pipeline_analysis
                 )
 
-            return MCPToolResult(
-                success=True,
-                data={
+            return {
+                "success": True,
+                "data": {
                     "totalValue": pipeline_analysis["total_value"],
                     "dealCount": pipeline_analysis["deal_count"],
                     "avgDealSize": pipeline_analysis["avg_deal_size"],
                     "conversionRate": pipeline_analysis["conversion_rate"],
                     "stageAnalysis": pipeline_analysis["stage_metrics"],
                 },
-                insights=pipeline_analysis["insights"],
-                recommendations=[r["action"] for r in recommendations],
-                metadata={
+                "insights": pipeline_analysis["insights"],
+                "recommendations": [r["action"] for r in recommendations],
+                "metadata": {
                     "analysis_type": analysis_type,
                     "data_source": "hubspot_sdk_deals",
                 },
-            )
+                "error_message": None
+            }
 
         except Exception as e:
-            return MCPToolResult(
-                success=False,
-                data=None,
-                error_message=f"Pipeline analysis failed: {str(e)}",
-            )
+            return {
+                "success": False,
+                "data": None,
+                "insights": [],
+                "recommendations": [],
+                "metadata": {},
+                "error_message": f"Pipeline analysis failed: {str(e)}"
+            }
 
     async def _get_deals_with_sdk(
         self, pipeline_ids: List[str] = None, timeframe: Dict[str, str] = None
@@ -3606,7 +3608,7 @@ class MCPHubspotConnector:
         return all_deals
 
     @handle_hubspot_errors
-    async def predict_lead_scores(self, params: Dict[str, Any]) -> MCPToolResult:
+    async def predict_lead_scores(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: predict_lead_scores - ML-based lead scoring using SDK"""
         try:
             contact_ids = params.get("contactIds", [])
@@ -3636,9 +3638,9 @@ class MCPHubspotConnector:
                 prediction_result
             )
 
-            return MCPToolResult(
-                success=True,
-                data={
+            return {
+                "success": True,
+                "data": {
                     "predictions": prediction_result["scores"],
                     "model_performance": prediction_result["performance_metrics"],
                     "feature_importance": (
@@ -3647,20 +3649,26 @@ class MCPHubspotConnector:
                         else None
                     ),
                 },
-                insights=prediction_insights["insights"],
-                recommendations=prediction_insights["recommendations"],
-                metadata={
+                "insights": prediction_insights["insights"],
+                "recommendations": prediction_insights["recommendations"],
+                "metadata": {
                     "model_type": model_type,
                     "training_data_size": prediction_result["training_size"],
                     "model_accuracy": prediction_result["accuracy"],
                     "data_source": "hubspot_sdk_multi_api",
                 },
-            )
+                "error_message": None
+            }
 
         except Exception as e:
-            return MCPToolResult(
-                success=False, data=None, error_message=f"Lead scoring failed: {str(e)}"
-            )
+            return {
+                "success": False,
+                "data": None,
+                "insights": [],
+                "recommendations": [],
+                "metadata": {},
+                "error_message": f"Lead scoring failed: {str(e)}"
+            }
 
     async def _get_contacts_by_ids_with_sdk(self, contact_ids: List[str]) -> List[Any]:
         """Get specific contacts by IDs using HubSpot SDK batch API"""
@@ -3711,7 +3719,7 @@ class MCPHubspotConnector:
 
     # ============ EXPORT FUNCTIONS ============
 
-    async def export_contact_analytics(self, params: Dict[str, Any] = None) -> MCPToolResult:
+    async def export_contact_analytics(self, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """Export function for contact analytics"""
         if params is None:
             params = {
@@ -3725,7 +3733,7 @@ class MCPHubspotConnector:
             }
         return await self.get_contact_analytics(params)
 
-    async def export_campaign_performance(self, params: Dict[str, Any] = None) -> MCPToolResult:
+    async def export_campaign_performance(self, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """Export function for campaign performance analysis"""
         if params is None:
             params = {
@@ -3736,7 +3744,7 @@ class MCPHubspotConnector:
             }
         return await self.analyze_campaign_performance(params)
 
-    async def export_sales_pipeline(self, params: Dict[str, Any] = None) -> MCPToolResult:
+    async def export_sales_pipeline(self, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """Export function for sales pipeline analysis"""
         if params is None:
             params = {
@@ -3749,7 +3757,7 @@ class MCPHubspotConnector:
             }
         return await self.analyze_sales_pipeline(params)
 
-    async def export_lead_scores(self, params: Dict[str, Any] = None) -> MCPToolResult:
+    async def export_lead_scores(self, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """Export function for lead scoring prediction"""
         if params is None:
             params = {
