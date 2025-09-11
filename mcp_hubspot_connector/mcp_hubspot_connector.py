@@ -1326,7 +1326,7 @@ class AnalyticsEngine:
             # Would compare against historical data
             summary = performance_analysis["summary"]
             historical_benchmarks = {}
-            
+
             # Only include metrics that are actually calculated
             if "avg_open_rate" in summary:
                 historical_benchmarks["historical_open_rate"] = summary["avg_open_rate"] * 0.95
@@ -1335,8 +1335,10 @@ class AnalyticsEngine:
             if "avg_bounce_rate" in summary:
                 historical_benchmarks["historical_bounce_rate"] = summary["avg_bounce_rate"] * 1.02
             if "avg_conversion_rate" in summary:
-                historical_benchmarks["historical_conversion_rate"] = summary["avg_conversion_rate"] * 0.90
-                
+                historical_benchmarks["historical_conversion_rate"] = (
+                    summary["avg_conversion_rate"] * 0.90
+                )
+
             return historical_benchmarks
         else:
             return industry_benchmarks
@@ -1593,28 +1595,34 @@ class AnalyticsEngine:
         if analysis_type == "conversion_rates":
             # Focus on conversion optimization
             if high_engagement_deals / deal_count > 0.3:
-                insights.append("High percentage of deals have strong engagement - good qualification")
+                insights.append(
+                    "High percentage of deals have strong engagement - good qualification"
+                )
             if deals_with_sales_interactions / deal_count < 0.2:
                 insights.append("Low sales interaction rate - consider more direct outreach")
             # Add conversion-specific metrics analysis
             if conversion_rate > 0.25:
                 insights.append("Excellent conversion rate - current process is working well")
             elif conversion_rate > 0.15:
-                insights.append("Good conversion rate - minor optimizations could boost performance")
-                
+                insights.append(
+                    "Good conversion rate - minor optimizations could boost performance"
+                )
+
         elif analysis_type == "engagement_analysis":
             # Focus on engagement metrics
             if avg_engagement_score > 15:
                 insights.append("Strong overall engagement levels indicate good lead quality")
             if recently_engaged_deals / deal_count < 0.4:
-                insights.append("Many deals lack recent engagement - implement re-engagement campaigns")
+                insights.append(
+                    "Many deals lack recent engagement - implement re-engagement campaigns"
+                )
             # Add engagement-specific insights
             avg_velocity = float(df["avg_engagement_velocity"].mean())
             if avg_velocity > 1.0:
                 insights.append("High engagement velocity indicates active prospects")
             elif avg_velocity < 0.3:
                 insights.append("Low engagement velocity - consider nurturing campaigns")
-                
+
         elif analysis_type == "deal_velocity":
             # Focus on deal progression speed
             velocity_metrics = self._calculate_pipeline_velocity(df, closed_won_count)
@@ -1622,7 +1630,7 @@ class AnalyticsEngine:
                 insights.append("Long sales cycle detected - consider process acceleration")
             if velocity_metrics.get("avg_days_to_close", 0) < 30:
                 insights.append("Fast sales cycle - excellent deal velocity")
-                
+
         elif analysis_type == "stage_analysis":
             # Focus on stage-specific metrics
             stage_counts = df["stage"].value_counts()
@@ -1630,14 +1638,18 @@ class AnalyticsEngine:
                 bottleneck_stage = stage_counts.idxmax()
                 bottleneck_count = stage_counts.max()
                 if bottleneck_count > deal_count * 0.4:
-                    insights.append(f"Bottleneck detected at '{bottleneck_stage}' stage - {bottleneck_count} deals")
-                    
+                    insights.append(
+                        f"Bottleneck detected at '{bottleneck_stage}' stage - {bottleneck_count} deals"
+                    )
+
         else:
             # Default comprehensive analysis
             if avg_engagement_score > 15:
                 insights.append("Strong overall engagement levels indicate good lead quality")
             if recently_engaged_deals / deal_count < 0.4:
-                insights.append("Many deals lack recent engagement - implement re-engagement campaigns")
+                insights.append(
+                    "Many deals lack recent engagement - implement re-engagement campaigns"
+                )
 
         # Calculate actual velocity metrics
         velocity_metrics = self._calculate_pipeline_velocity(df, closed_won_count)
@@ -2687,6 +2699,7 @@ class MCPHubspotConnector:
         self.cache = {}
         self.cache_timestamps = {}
 
+    # * MCP function.
     @handle_hubspot_errors
     async def get_contact_analytics(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: get_contact_analytics - Advanced contact analytics using SDK"""
@@ -2873,16 +2886,18 @@ class MCPHubspotConnector:
 
         return engagement_data
 
-    async def _get_campaign_engagement_data_with_sdk(self, campaign_ids: List[str]) -> List[Dict[str, Any]]:
+    async def _get_campaign_engagement_data_with_sdk(
+        self, campaign_ids: List[str]
+    ) -> List[Dict[str, Any]]:
         """Get campaign engagement data using HubSpot SDK
-        
+
         This is a placeholder method that returns mock engagement data for campaigns.
         In a full implementation, this would use HubSpot's engagement API endpoints
         to get actual email opens, clicks, and other engagement events for campaigns.
         """
-        
+
         engagement_data = []
-        
+
         # For each campaign, generate mock engagement data
         for campaign_id in campaign_ids:
             # Mock engagement events for this campaign
@@ -2899,13 +2914,13 @@ class MCPHubspotConnector:
                     {
                         "campaign_id": campaign_id,
                         "contact_id": f"contact_{i}",
-                        "type": "email_click", 
+                        "type": "email_click",
                         "timestamp": datetime.now().isoformat(),
                         "event_id": f"event_{campaign_id}_{i}_click",
                     },
                 ]
                 engagement_data.extend(mock_events)
-        
+
         return engagement_data
 
     def get_contacts(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -3361,6 +3376,7 @@ class MCPHubspotConnector:
             self.logger.error(log)
             return f"HubSpot API connection failed: {str(e)}"
 
+    # * MCP function.
     @handle_hubspot_errors
     async def analyze_campaign_performance(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: analyze_campaign_performance - Campaign analytics using SDK"""
@@ -3379,35 +3395,35 @@ class MCPHubspotConnector:
                 filtered_campaigns = []
                 start_date = date_range.get("start")
                 end_date = date_range.get("end")
-                
+
                 if start_date or end_date:
                     import pandas as pd
-                    
+
                     for campaign in campaigns_data:
                         # Check if campaign has date fields to filter on
                         campaign_date = None
-                        if hasattr(campaign, 'start_date_time'):
-                            campaign_date = getattr(campaign, 'start_date_time')
-                        elif hasattr(campaign, 'created_at'):
-                            campaign_date = getattr(campaign, 'created_at')
-                        elif hasattr(campaign, 'createdate'):
-                            campaign_date = getattr(campaign, 'createdate')
-                        
+                        if hasattr(campaign, "start_date_time"):
+                            campaign_date = getattr(campaign, "start_date_time")
+                        elif hasattr(campaign, "created_at"):
+                            campaign_date = getattr(campaign, "created_at")
+                        elif hasattr(campaign, "createdate"):
+                            campaign_date = getattr(campaign, "createdate")
+
                         if campaign_date:
                             try:
                                 campaign_dt = pd.to_datetime(campaign_date)
                                 include_campaign = True
-                                
+
                                 if start_date:
                                     start_dt = pd.to_datetime(start_date)
                                     if campaign_dt < start_dt:
                                         include_campaign = False
-                                        
+
                                 if end_date and include_campaign:
                                     end_dt = pd.to_datetime(end_date)
                                     if campaign_dt > end_dt:
                                         include_campaign = False
-                                        
+
                                 if include_campaign:
                                     filtered_campaigns.append(campaign)
                             except:
@@ -3416,12 +3432,12 @@ class MCPHubspotConnector:
                         else:
                             # If no date field found, include the campaign
                             filtered_campaigns.append(campaign)
-                    
+
                     campaigns_data = filtered_campaigns
                     # Update campaign_ids to match filtered campaigns
-                    if hasattr(campaigns_data[0], 'id') if campaigns_data else False:
+                    if hasattr(campaigns_data[0], "id") if campaigns_data else False:
                         campaign_ids = [campaign.id for campaign in campaigns_data]
-                    elif hasattr(campaigns_data[0], 'object_id') if campaigns_data else False:
+                    elif hasattr(campaigns_data[0], "object_id") if campaigns_data else False:
                         campaign_ids = [campaign.object_id for campaign in campaigns_data]
 
             # Get detailed campaign statistics
@@ -3465,7 +3481,9 @@ class MCPHubspotConnector:
                     "benchmark_type": benchmark_type,
                     "data_source": "hubspot_sdk_marketing",
                     "date_range_applied": date_range if date_range else None,
-                    "date_filtering_enabled": bool(date_range and (date_range.get("start") or date_range.get("end"))),
+                    "date_filtering_enabled": bool(
+                        date_range and (date_range.get("start") or date_range.get("end"))
+                    ),
                 },
                 "error_message": None,
             }
@@ -3598,6 +3616,7 @@ class MCPHubspotConnector:
 
         return stats
 
+    # * MCP function.
     @handle_hubspot_errors
     async def analyze_sales_pipeline(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: analyze_sales_pipeline - Sales pipeline analytics using SDK"""
@@ -3753,6 +3772,7 @@ class MCPHubspotConnector:
         self.logger.info(f"Fetched {len(all_deals)} deals using HubSpot SDK")
         return all_deals
 
+    # * MCP function.
     @handle_hubspot_errors
     async def predict_lead_scores(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: predict_lead_scores - ML-based lead scoring using SDK"""
@@ -3864,62 +3884,6 @@ class MCPHubspotConnector:
         return all_contacts
 
     # ============ EXPORT FUNCTIONS ============
-
-    async def export_contact_analytics(self, params: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Export function for contact analytics"""
-        if params is None:
-            params = {
-                "dateRange": {
-                    "start": "2024-01-01T00:00:00Z",
-                    "end": "2024-12-31T23:59:59Z",
-                },
-                "segmentation": "engagement_level",
-                "includeEngagement": True,
-                "limit": 1000,
-            }
-        return await self.get_contact_analytics(params)
-
-    async def export_campaign_performance(self, params: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Export function for campaign performance analysis"""
-        if params is None:
-            # Default to last 6 months of campaign data
-            from datetime import datetime, timedelta
-            now = datetime.utcnow()
-            six_months_ago = now - timedelta(days=180)
-            
-            params = {
-                "campaignIds": [],  # Will get all campaigns
-                "metrics": ["open_rate", "click_rate", "conversion_rate"],
-                "benchmarkType": "industry",
-                "includeRecommendations": True,
-                "dateRange": {
-                    "start": six_months_ago.isoformat() + "Z",
-                    "end": now.isoformat() + "Z"
-                }
-            }
-        return await self.analyze_campaign_performance(params)
-
-    async def export_sales_pipeline(self, params: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Export function for sales pipeline analysis"""
-        if params is None:
-            params = {
-                "timeframe": {
-                    "start": "2024-01-01T00:00:00Z",
-                    "end": "2024-12-31T23:59:59Z",
-                },
-                "analysisType": "conversion_rates",
-                "includeRecommendations": True,
-            }
-        return await self.analyze_sales_pipeline(params)
-
-    async def export_lead_scores(self, params: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Export function for lead scoring prediction"""
-        if params is None:
-            params = {
-                "modelType": "conversion_probability",
-                "includeFeatureImportance": True,
-            }
-        return await self.predict_lead_scores(params)
 
     # Redundant export functions removed - use the direct methods instead:
     # get_contacts(), get_deals(), get_companies(), search_contacts(),
