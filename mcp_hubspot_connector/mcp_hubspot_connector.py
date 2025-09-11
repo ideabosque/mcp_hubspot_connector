@@ -3780,6 +3780,7 @@ class MCPHubspotConnector:
             contact_ids = params.get("contactIds", [])
             model_type = params.get("modelType", "conversion_probability")
             include_feature_importance = params.get("includeFeatureImportance", True)
+            date_range = params.get("dateRange", {})
 
             # Get contacts using SDK
             if contact_ids:
@@ -3787,8 +3788,11 @@ class MCPHubspotConnector:
             else:
                 contacts_data = await self._get_contacts_with_sdk(limit=1000)
 
-            # Get historical deals for training
-            deals_data = await self._get_deals_with_sdk()
+            # Get historical deals for training with date filtering if specified
+            if date_range and date_range.get("start") and date_range.get("end"):
+                deals_data = await self._get_deals_with_sdk(timeframe=date_range)
+            else:
+                deals_data = await self._get_deals_with_sdk()
 
             # Get engagement data
             contact_ids_list = [contact.id for contact in contacts_data]
@@ -3820,20 +3824,21 @@ class MCPHubspotConnector:
                 "metadata": {
                     "model_type": model_type,
                     "training_data_size": prediction_result["training_size"],
-                    "model_accuracy": prediction_result["accuracy"],
+                    "model_accuracy": prediction_result["performance_metrics"]["accuracy"],
                     "data_source": "hubspot_sdk_multi_api",
                 },
                 "error_message": None,
             }
 
         except Exception as e:
+            log = traceback.format_exc()
             return {
                 "success": False,
                 "data": None,
                 "insights": [],
                 "recommendations": [],
                 "metadata": {},
-                "error_message": f"Lead scoring failed: {str(e)}",
+                "error_message": f"Lead scoring failed: {str(e)}\n{log}",
             }
 
     async def _get_contacts_by_ids_with_sdk(self, contact_ids: List[str]) -> List[Any]:
