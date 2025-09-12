@@ -31,7 +31,7 @@ pip install -e ".[all]"
 ### Option 2: Direct requirements installation
 ```bash
 # Install test dependencies only
-pip install -r mcp_hubspot_connector/tests/requirements-test.txt
+pip install -r mcp_hubspot_connector/tests/requirements.txt
 
 # Install main dependencies
 pip install hubspot-api-client>=12.0.0 python-dotenv>=0.19.0
