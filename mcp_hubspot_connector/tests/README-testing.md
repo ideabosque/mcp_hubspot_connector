@@ -232,8 +232,8 @@ async def test_predict_lead_scores_py(connector):
         "predict_lead_scores",
         {
             "params": {
-                "modelType": "conversion_probability",
-                "dateRange": {
+                "model_type": "conversion_probability",
+                "date_range": {
                     "start": three_months_ago.to_iso8601_string(),
                     "end": now.to_iso8601_string(),
                 },

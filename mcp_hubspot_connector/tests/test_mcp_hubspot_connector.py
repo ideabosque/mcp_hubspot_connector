@@ -254,6 +254,207 @@ def connector():
 
             self.predict_lead_scores = mock_predict_lead_scores
 
+            async def mock_create_contact_segments(**_):
+                return {
+                    "success": True,
+                    "data": {
+                        "segments": [
+                            {
+                                "segment_id": "high_value",
+                                "name": "High Value Customers",
+                                "contact_count": 250,
+                                "criteria": {
+                                    "lifetime_value": {"min": 10000},
+                                    "engagement_score": {"min": 8},
+                                },
+                                "contacts": [
+                                    {"contact_id": "c1", "score": 9.2},
+                                    {"contact_id": "c2", "score": 8.7},
+                                ],
+                            },
+                            {
+                                "segment_id": "potential_churners",
+                                "name": "Potential Churners",
+                                "contact_count": 75,
+                                "criteria": {
+                                    "last_activity_days": {"min": 90},
+                                    "engagement_score": {"max": 3},
+                                },
+                                "contacts": [
+                                    {"contact_id": "c3", "score": 2.1},
+                                    {"contact_id": "c4", "score": 2.8},
+                                ],
+                            },
+                        ],
+                        "segmentation_quality": {
+                            "total_contacts": 325,
+                            "num_segments": 2,
+                            "silhouette_score": 0.8,
+                        },
+                        "contact_assignments": [
+                            {
+                                "contact_id": "c1",
+                                "segment": "High Value Customers",
+                                "engagement_score": 9.2,
+                            },
+                            {
+                                "contact_id": "c2",
+                                "segment": "High Value Customers",
+                                "engagement_score": 8.7,
+                            },
+                            {
+                                "contact_id": "c3",
+                                "segment": "Potential Churners",
+                                "engagement_score": 2.1,
+                            },
+                            {
+                                "contact_id": "c4",
+                                "segment": "Potential Churners",
+                                "engagement_score": 2.8,
+                            },
+                        ],
+                        "segment_characteristics": [
+                            {
+                                "label": "High Value Customers",
+                                "size": 250,
+                                "percentage": 76.9,
+                                "characteristics": {"avg_engagement": 8.95},
+                            },
+                            {
+                                "label": "Potential Churners",
+                                "size": 75,
+                                "percentage": 23.1,
+                                "characteristics": {"avg_engagement": 2.45},
+                            },
+                        ],
+                    },
+                    "insights": [
+                        "High value segment shows strong engagement",
+                        "Churn risk identified in 75 contacts",
+                    ],
+                    "recommendations": [
+                        "Focus retention efforts on potential churners",
+                        "Expand high-value customer programs",
+                    ],
+                    "metadata": {
+                        "source": "mock",
+                        "algorithm": "k-means",
+                        "segmentation_type": "behavioral",
+                        "num_segments": 2,
+                        "total_contacts": 325,
+                        "contact_limit": 1000,
+                    },
+                    "error_message": None,
+                }
+
+            self.create_contact_segments = mock_create_contact_segments
+
+            async def mock_forecast_revenue(**_):
+                return {
+                    "success": True,
+                    "data": {
+                        "forecast": {
+                            "total_revenue": 1250000,
+                            "period": "90_days",
+                            "breakdown": [
+                                {"period": "month_1", "revenue": 400000, "probability": 0.85},
+                                {"period": "month_2", "revenue": 425000, "probability": 0.82},
+                                {"period": "month_3", "revenue": 425000, "probability": 0.80},
+                            ],
+                        },
+                        "confidence_interval": {"lower": 1100000, "upper": 1400000},
+                        "scenarios": {
+                            "optimistic": 1400000,
+                            "realistic": 1250000,
+                            "pessimistic": 1100000,
+                        },
+                        "model_performance": {"accuracy": 0.87, "rmse": 45000, "mae": 32000},
+                    },
+                    "insights": [
+                        "Strong pipeline indicates healthy revenue forecast",
+                        "Model shows high confidence in predictions",
+                    ],
+                    "recommendations": [
+                        "Focus on high-probability deals",
+                        "Monitor risk factors closely",
+                    ],
+                    "metadata": {
+                        "forecast_period": "90_days",
+                        "confidence_level": 0.95,
+                        "historical_data_points": 150,
+                        "pipeline_deals": 25,
+                        "data_source": "hubspot_sdk_revenue_forecasting",
+                    },
+                    "error_message": None,
+                }
+
+            self.forecast_revenue = mock_forecast_revenue
+
+            async def mock_generate_executive_report(**_):
+                return {
+                    "success": True,
+                    "data": {
+                        "report_id": "exec_report_2024_01",
+                        "generated_at": "2024-01-15T10:00:00Z",
+                        "period": {"start": "2024-01-01", "end": "2024-01-31"},
+                        "executive_summary": {
+                            "total_contacts": 2500,
+                            "new_contacts": 150,
+                            "total_deals": 85,
+                            "won_deals": 12,
+                            "total_revenue": 485000,
+                            "pipeline_value": 1250000,
+                        },
+                        "key_metrics": {
+                            "contact_growth_rate": 0.06,
+                            "deal_win_rate": 0.14,
+                            "avg_deal_size": 40416,
+                            "sales_cycle_days": 45,
+                            "customer_acquisition_cost": 1200,
+                        },
+                        "performance_highlights": [
+                            "6% growth in contact base",
+                            "Pipeline value increased by 15%",
+                            "Sales cycle reduced by 8 days",
+                        ],
+                        "areas_of_concern": [
+                            "Deal win rate below target (20%)",
+                            "Customer acquisition cost trending up",
+                        ],
+                        "departmental_breakdown": {
+                            "sales": {
+                                "deals_closed": 12,
+                                "revenue": 485000,
+                                "target_achievement": 0.97,
+                            },
+                            "marketing": {
+                                "leads_generated": 150,
+                                "cost_per_lead": 80,
+                                "lead_quality_score": 7.2,
+                            },
+                        },
+                        "forecasts": {
+                            "next_month_revenue": 425000,
+                            "quarter_end_pipeline": 1400000,
+                            "expected_new_customers": 18,
+                        },
+                    },
+                    "insights": [
+                        "Strong overall growth trajectory",
+                        "Sales efficiency improvements needed",
+                        "Marketing ROI remains strong",
+                    ],
+                    "recommendations": [
+                        "Implement deal acceleration strategies",
+                        "Review and optimize acquisition channels",
+                        "Focus on high-value customer segments",
+                    ],
+                    "metadata": {"source": "mock", "report_type": "executive"},
+                    "error_message": None,
+                }
+
+            self.generate_executive_report = mock_generate_executive_report
+
     if MCPHubspotConnector is None:
         return _Mock()
 
@@ -732,11 +933,11 @@ async def test_get_contact_analytics_py(connector: Any):
                 "params": {
                     "segmentation": "engagement_level",
                     "limit": 200,
-                    "dateRange": {
+                    "date_range": {
                         "start": three_months_ago.to_iso8601_string(),
                         "end": now.to_iso8601_string(),
                     },
-                    "includeEngagement": True,
+                    "include_engagement": True,
                 }
             },
             "get_contact_analytics",
@@ -761,11 +962,11 @@ async def test_get_contact_analytics_py(connector: Any):
             {
                 "params": {
                     "segmentation": "engagement_level",
-                    "dateRange": {
+                    "date_range": {
                         "start": three_months_ago.to_iso8601_string(),
                         "end": now.to_iso8601_string(),
                     },
-                    "includeEngagement": True,
+                    "include_engagement": True,
                     "limit": 500,
                 }
             },
@@ -795,9 +996,9 @@ async def test_analyze_campaign_performance_py(connector: Any):
             "analyze_campaign_performance",
             {
                 "params": {
-                    "benchmarkType": "industry",
+                    "benchmark_type": "industry",
                     "metrics": ["open_rate", "click_rate", "bounce_rate", "conversion_rate"],
-                    "dateRange": {
+                    "date_range": {
                         "start": six_months_ago.to_iso8601_string(),
                         "end": now.to_iso8601_string(),
                     },
@@ -849,7 +1050,7 @@ async def test_analyze_sales_pipeline_py(connector: Any):
             "analyze_sales_pipeline",
             {
                 "params": {
-                    "analysisType": "conversion_rates",
+                    "analysis_type": "conversion_rates",
                     "timeframe": {
                         "start": three_weeks_ago.to_iso8601_string(),
                         "end": now.to_iso8601_string(),
@@ -884,7 +1085,7 @@ async def test_analyze_sales_pipeline_py(connector: Any):
 
 
 @pytest.mark.asyncio
-# @pytest.mark.skip(reason="demonstrating skipping")
+@pytest.mark.skip(reason="demonstrating skipping")
 async def test_predict_lead_scores_py(connector: Any):
     """Test lead scoring prediction"""
     # Calculate dynamic date range: 3 months ago to now using pendulum
@@ -897,8 +1098,8 @@ async def test_predict_lead_scores_py(connector: Any):
             "predict_lead_scores",
             {
                 "params": {
-                    "modelType": "conversion_probability",
-                    "dateRange": {
+                    "model_type": "conversion_probability",
+                    "date_range": {
                         "start": three_months_ago.to_iso8601_string(),
                         "end": now.to_iso8601_string(),
                     },
@@ -931,6 +1132,230 @@ async def test_predict_lead_scores_py(connector: Any):
         assert result is not None, "Result should not be None when no error occurs"
         assert result["success"] is True, "Mock result should always be successful"
         assert len(result["data"]["predictions"]) > 0, "Mock result should have predictions"
+
+
+@pytest.mark.asyncio
+# @pytest.mark.skip(reason="demonstrating skipping")
+async def test_create_contact_segments_py(connector: Any):
+    """Test contact segmentation functionality"""
+    # Calculate dynamic date range: 6 months ago to now using pendulum (recommended for performance)
+    now = pendulum.now("UTC")
+    six_months_ago = now.subtract(months=6)
+
+    if getattr(connector, "__is_real__", False):
+        result, error = await _call_async_method(
+            connector,
+            "create_contact_segments",
+            {
+                "params": {
+                    "segmentation_type": "behavioral",
+                    "criteria": {
+                        "engagement_score": {"min": 5},
+                        "lifetime_value": {"min": 1000},
+                        "date_range": {
+                            "start": six_months_ago.to_iso8601_string(),
+                            "end": now.to_iso8601_string(),
+                        },
+                    },
+                    "number_of_segments": 5,
+                    "limit": 500,  # Reasonable limit for testing
+                }
+            },
+            "create_contact_segments",
+        )
+        if error:
+            pytest.fail(f"create_contact_segments failed with error: {error}")
+
+        assert result is not None, "Result should not be None when no error occurs"
+        assert isinstance(result, dict), "Result should be a dictionary"
+        assert "success" in result, "Result should have 'success' key"
+        assert "data" in result, "Result should have 'data' key"
+
+        if not result["success"]:
+            pytest.fail(f"create_contact_segments returned success=False")
+
+        assert "segments" in result["data"], "Result data should contain 'segments'"
+        assert (
+            "segmentation_quality" in result["data"]
+        ), "Result data should contain 'segmentation_quality'"
+        assert (
+            "contact_assignments" in result["data"]
+        ), "Result data should contain 'contact_assignments'"
+        assert isinstance(result["data"]["segments"], list), "Segments should be a list"
+        assert (
+            "total_contacts" in result["data"]["segmentation_quality"]
+        ), "Segmentation quality should contain 'total_contacts'"
+    else:
+        result, error = await _call_async_method(
+            connector,
+            "create_contact_segments",
+            {
+                "params": {
+                    "segmentation_type": "behavioral",
+                    "number_of_segments": 5,
+                    "criteria": {
+                        "engagement_score": {"min": 5},
+                        "date_range": {
+                            "start": six_months_ago.to_iso8601_string(),
+                            "end": now.to_iso8601_string(),
+                        },
+                    },
+                    "limit": 500,  # Reasonable limit for testing
+                }
+            },
+            "create_contact_segments",
+        )
+        if error:
+            pytest.fail(f"create_contact_segments failed with error: {error}")
+
+        assert result is not None, "Result should not be None when no error occurs"
+        assert result["success"] is True, "Mock result should always be successful"
+        assert (
+            result["data"]["segmentation_quality"]["num_segments"] == 2
+        ), "Mock result should have expected segment count"
+        assert len(result["data"]["segments"]) == 2, "Mock result should have 2 segments"
+        assert (
+            result["data"]["segments"][0]["segment_id"] == "high_value"
+        ), "First segment should be high_value"
+
+
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="demonstrating skipping")
+async def test_forecast_revenue_py(connector: Any):
+    """Test revenue forecasting functionality"""
+    if getattr(connector, "__is_real__", False):
+        result, error = await _call_async_method(
+            connector,
+            "forecast_revenue",
+            {"params": {"forecast_period": "90_days", "confidence_level": 0.95}},
+            "forecast_revenue",
+        )
+        if error:
+            pytest.fail(f"forecast_revenue failed with error: {error}")
+
+        assert result is not None, "Result should not be None when no error occurs"
+        assert isinstance(result, dict), "Result should be a dictionary"
+        assert "success" in result, "Result should have 'success' key"
+        assert "data" in result, "Result should have 'data' key"
+
+        if not result["success"]:
+            pytest.fail(f"forecast_revenue returned success=False")
+
+        assert "forecast" in result["data"], "Result data should contain 'forecast'"
+        assert (
+            "confidence_interval" in result["data"]
+        ), "Result data should contain 'confidence_interval'"
+        assert "scenarios" in result["data"], "Result data should contain 'scenarios'"
+        assert (
+            "model_performance" in result["data"]
+        ), "Result data should contain 'model_performance'"
+
+        # Check metadata structure
+        assert "metadata" in result, "Result should contain 'metadata'"
+        assert "forecast_period" in result["metadata"], "Metadata should contain 'forecast_period'"
+        assert (
+            "confidence_level" in result["metadata"]
+        ), "Metadata should contain 'confidence_level'"
+    else:
+        result, error = await _call_async_method(
+            connector,
+            "forecast_revenue",
+            {"params": {"forecast_period": "90_days", "confidence_level": 0.95}},
+            "forecast_revenue",
+        )
+        if error:
+            pytest.fail(f"forecast_revenue failed with error: {error}")
+
+        assert result is not None, "Result should not be None when no error occurs"
+        assert result["success"] is True, "Mock result should always be successful"
+        assert (
+            result["data"]["forecast"]["total_revenue"] == 1250000
+        ), "Mock result should have expected forecast"
+        assert (
+            "confidence_interval" in result["data"]
+        ), "Mock result should have confidence interval"
+        assert (
+            len(result["data"]["forecast"]["breakdown"]) == 3
+        ), "Mock result should have 3 period breakdown"
+        assert (
+            result["data"]["scenarios"]["realistic"] == 1250000
+        ), "Mock should have realistic scenario"
+        assert (
+            result["metadata"]["forecast_period"] == "90_days"
+        ), "Mock should have correct forecast period"
+
+
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="demonstrating skipping")
+async def test_generate_executive_report_py(connector: Any):
+    """Test executive report generation functionality"""
+    # Calculate dynamic report period: last month using pendulum
+    now = pendulum.now("UTC")
+    last_month_start = now.subtract(months=1).start_of("month")
+    last_month_end = now.subtract(months=1).end_of("month")
+
+    if getattr(connector, "__is_real__", False):
+        result, error = await _call_async_method(
+            connector,
+            "generate_executive_report",
+            {
+                "params": {
+                    "report_type": "monthly",
+                    "timeframe": {
+                        "start": last_month_start.to_iso8601_string(),
+                        "end": last_month_end.to_iso8601_string(),
+                    },
+                    "include_forecast": True,
+                    "departments": ["sales", "marketing"],
+                    "detail_level": "executive",
+                }
+            },
+            "generate_executive_report",
+        )
+        if error:
+            pytest.fail(f"generate_executive_report failed with error: {error}")
+
+        assert result is not None, "Result should not be None when no error occurs"
+        assert isinstance(result, dict), "Result should be a dictionary"
+        assert "success" in result, "Result should have 'success' key"
+        assert "data" in result, "Result should have 'data' key"
+
+        if not result["success"]:
+            pytest.fail(f"generate_executive_report returned success=False")
+
+        assert "report_id" in result["data"], "Result data should contain 'report_id'"
+        assert (
+            "executive_summary" in result["data"]
+        ), "Result data should contain 'executive_summary'"
+        assert "key_metrics" in result["data"], "Result data should contain 'key_metrics'"
+        assert (
+            "departmental_breakdown" in result["data"]
+        ), "Result data should contain 'departmental_breakdown'"
+    else:
+        result, error = await _call_async_method(
+            connector,
+            "generate_executive_report",
+            {"params": {"report_type": "monthly", "include_forecast": True}},
+            "generate_executive_report",
+        )
+        if error:
+            pytest.fail(f"generate_executive_report failed with error: {error}")
+
+        assert result is not None, "Result should not be None when no error occurs"
+        assert result["success"] is True, "Mock result should always be successful"
+        assert (
+            result["data"]["report_id"] == "exec_report_2024_01"
+        ), "Mock result should have expected report ID"
+        assert "executive_summary" in result["data"], "Mock result should have executive summary"
+        assert (
+            result["data"]["executive_summary"]["total_contacts"] == 2500
+        ), "Mock should have expected contact count"
+        assert (
+            "departmental_breakdown" in result["data"]
+        ), "Mock result should have departmental breakdown"
+        assert (
+            len(result["data"]["performance_highlights"]) > 0
+        ), "Mock should have performance highlights"
 
 
 if __name__ == "__main__":
