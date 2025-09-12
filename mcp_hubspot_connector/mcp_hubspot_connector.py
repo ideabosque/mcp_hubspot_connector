@@ -196,7 +196,7 @@ class MCPHubspotConnector:
         self.cache = {}
         self.cache_timestamps = {}
 
-    # * MCP function.
+    # * MCP Function.
     @handle_hubspot_errors
     async def get_contact_analytics(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: get_contact_analytics - Advanced contact analytics using SDK"""
@@ -279,15 +279,15 @@ class MCPHubspotConnector:
 
         if date_range and date_range.get("start") and date_range.get("end"):
             import pendulum
-            
+
             try:
                 # Convert ISO strings to millisecond timestamps
                 start_dt = pendulum.parse(date_range["start"])
                 end_dt = pendulum.parse(date_range["end"])
-                
+
                 start_timestamp = str(int(start_dt.timestamp() * 1000))
                 end_timestamp = str(int(end_dt.timestamp() * 1000))
-                
+
                 filters = [
                     {
                         "propertyName": "createdate",
@@ -296,9 +296,9 @@ class MCPHubspotConnector:
                         "highValue": end_timestamp,
                     }
                 ]
-                
+
                 self.logger.info(f"Contact date filter: {start_timestamp} to {end_timestamp}")
-                
+
             except Exception as e:
                 self.logger.warning(f"Date conversion failed: {e}. Skipping date filter.")
                 filters = []
@@ -434,6 +434,7 @@ class MCPHubspotConnector:
 
         return engagement_data
 
+    # * MCP Function.
     def get_contacts(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Get contacts from HubSpot."""
         try:
@@ -490,6 +491,7 @@ class MCPHubspotConnector:
             self.logger.error(log)
             raise e
 
+    # * MCP Function.
     def create_contact(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new contact in HubSpot."""
         try:
@@ -520,6 +522,7 @@ class MCPHubspotConnector:
             self.logger.error(log)
             raise e
 
+    # * MCP Function.
     def update_contact(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Update an existing contact in HubSpot."""
         try:
@@ -554,6 +557,7 @@ class MCPHubspotConnector:
             self.logger.error(log)
             raise e
 
+    # * MCP Function.
     def get_deals(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Get deals from HubSpot."""
         try:
@@ -610,6 +614,7 @@ class MCPHubspotConnector:
             self.logger.error(log)
             raise e
 
+    # * MCP Function.
     def create_deal(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new deal in HubSpot."""
         try:
@@ -640,6 +645,7 @@ class MCPHubspotConnector:
             self.logger.error(log)
             raise e
 
+    # * MCP Function.
     def get_companies(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Get companies from HubSpot."""
         try:
@@ -692,6 +698,7 @@ class MCPHubspotConnector:
             self.logger.error(log)
             raise e
 
+    # * MCP Function.
     def search_contacts(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Search contacts in HubSpot."""
         try:
@@ -744,6 +751,7 @@ class MCPHubspotConnector:
             self.logger.error(log)
             raise e
 
+    # * MCP Function.
     def get_contact_by_email(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Get a specific contact by email address."""
         try:
@@ -791,6 +799,7 @@ class MCPHubspotConnector:
             self.logger.error(log)
             raise e
 
+    # * MCP Function.
     def get_marketing_events(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Get marketing events from HubSpot."""
         try:
@@ -883,7 +892,7 @@ class MCPHubspotConnector:
             self.logger.error(log)
             return f"HubSpot API connection failed: {str(e)}"
 
-    # * MCP function.
+    # * MCP Function.
     @handle_hubspot_errors
     async def analyze_campaign_performance(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: analyze_campaign_performance - Campaign analytics using SDK"""
@@ -1123,7 +1132,7 @@ class MCPHubspotConnector:
 
         return stats
 
-    # * MCP function.
+    # * MCP Function.
     @handle_hubspot_errors
     async def analyze_sales_pipeline(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: analyze_sales_pipeline - Sales pipeline analytics using SDK"""
@@ -1228,24 +1237,26 @@ class MCPHubspotConnector:
             # Add date range filter - convert ISO dates to millisecond timestamps
             if timeframe and timeframe.get("start") and timeframe.get("end"):
                 import pendulum
-                
+
                 try:
                     # Convert ISO strings to millisecond timestamps
                     start_dt = pendulum.parse(timeframe["start"])
-                    end_dt = pendulum.parse(timeframe["end"]) 
-                    
+                    end_dt = pendulum.parse(timeframe["end"])
+
                     start_timestamp = str(int(start_dt.timestamp() * 1000))
                     end_timestamp = str(int(end_dt.timestamp() * 1000))
-                    
-                    filters.append({
-                        "propertyName": "createdate",
-                        "operator": "BETWEEN",
-                        "value": start_timestamp,
-                        "highValue": end_timestamp,
-                    })
-                    
+
+                    filters.append(
+                        {
+                            "propertyName": "createdate",
+                            "operator": "BETWEEN",
+                            "value": start_timestamp,
+                            "highValue": end_timestamp,
+                        }
+                    )
+
                     self.logger.info(f"Date filter: {start_timestamp} to {end_timestamp}")
-                    
+
                 except Exception as e:
                     self.logger.warning(f"Date conversion failed: {e}. Skipping date filter.")
                     # Continue without date filter rather than failing
@@ -1272,10 +1283,15 @@ class MCPHubspotConnector:
 
                     if search_response and search_response.results:
                         all_deals.extend(search_response.results)
-                        self.logger.info(f"Retrieved {len(search_response.results)} deals, total: {len(all_deals)}")
+                        self.logger.info(
+                            f"Retrieved {len(search_response.results)} deals, total: {len(all_deals)}"
+                        )
 
-                    if (search_response.paging and search_response.paging.next and 
-                        len(all_deals) < max_deals):
+                    if (
+                        search_response.paging
+                        and search_response.paging.next
+                        and len(all_deals) < max_deals
+                    ):
                         after = search_response.paging.next.after
                     else:
                         break
@@ -1309,7 +1325,7 @@ class MCPHubspotConnector:
         self.logger.info(f"Fetched {len(all_deals)} deals using HubSpot SDK")
         return all_deals
 
-    # * MCP function.
+    # * MCP Function.
     @handle_hubspot_errors
     async def predict_lead_scores(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: predict_lead_scores - ML-based lead scoring using SDK"""
@@ -1671,24 +1687,28 @@ class MCPHubspotConnector:
         # Date range filters - convert ISO to timestamps
         if "date_range" in criteria:
             import pendulum
-            
+
             try:
                 # Convert ISO strings to millisecond timestamps
                 start_dt = pendulum.parse(criteria["date_range"]["start"])
                 end_dt = pendulum.parse(criteria["date_range"]["end"])
-                
+
                 start_timestamp = str(int(start_dt.timestamp() * 1000))
                 end_timestamp = str(int(end_dt.timestamp() * 1000))
-                
-                filters.append({
-                    "propertyName": "createdate",
-                    "operator": "BETWEEN",
-                    "value": start_timestamp,
-                    "highValue": end_timestamp,
-                })
-                
-                self.logger.info(f"Advanced contact date filter: {start_timestamp} to {end_timestamp}")
-                
+
+                filters.append(
+                    {
+                        "propertyName": "createdate",
+                        "operator": "BETWEEN",
+                        "value": start_timestamp,
+                        "highValue": end_timestamp,
+                    }
+                )
+
+                self.logger.info(
+                    f"Advanced contact date filter: {start_timestamp} to {end_timestamp}"
+                )
+
             except Exception as e:
                 self.logger.warning(f"Advanced date conversion failed: {e}. Skipping date filter.")
 
@@ -1756,22 +1776,24 @@ class MCPHubspotConnector:
             # Try with just date range if it exists
             if "date_range" in criteria:
                 import pendulum
-                
+
                 try:
                     # Convert ISO strings to millisecond timestamps
                     start_dt = pendulum.parse(criteria["date_range"]["start"])
                     end_dt = pendulum.parse(criteria["date_range"]["end"])
-                    
+
                     start_timestamp = str(int(start_dt.timestamp() * 1000))
                     end_timestamp = str(int(end_dt.timestamp() * 1000))
-                    
-                    fallback_filters.append({
-                        "propertyName": "createdate",
-                        "operator": "BETWEEN",
-                        "value": start_timestamp,
-                        "highValue": end_timestamp,
-                    })
-                    
+
+                    fallback_filters.append(
+                        {
+                            "propertyName": "createdate",
+                            "operator": "BETWEEN",
+                            "value": start_timestamp,
+                            "highValue": end_timestamp,
+                        }
+                    )
+
                 except Exception as e:
                     self.logger.warning(f"Fallback date conversion failed: {e}. Using no filters.")
 
