@@ -278,19 +278,33 @@ class MCPHubspotConnector:
         all_contacts = []
 
         if date_range and date_range.get("start") and date_range.get("end"):
-            filter_group = FilterGroup(
-                filters=[
-                    Filter(
-                        property_name="createdate",
-                        operator="BETWEEN",
-                        value=date_range["start"],
-                        high_value=date_range["end"],
-                    )
+            import pendulum
+            
+            try:
+                # Convert ISO strings to millisecond timestamps
+                start_dt = pendulum.parse(date_range["start"])
+                end_dt = pendulum.parse(date_range["end"])
+                
+                start_timestamp = str(int(start_dt.timestamp() * 1000))
+                end_timestamp = str(int(end_dt.timestamp() * 1000))
+                
+                filters = [
+                    {
+                        "propertyName": "createdate",
+                        "operator": "BETWEEN",
+                        "value": start_timestamp,
+                        "highValue": end_timestamp,
+                    }
                 ]
-            )
+                
+                self.logger.info(f"Contact date filter: {start_timestamp} to {end_timestamp}")
+                
+            except Exception as e:
+                self.logger.warning(f"Date conversion failed: {e}. Skipping date filter.")
+                filters = []
 
             search_request = PublicObjectSearchRequest(
-                filter_groups=[filter_group],
+                filter_groups=[{"filters": filters}],
                 properties=properties,
                 limit=min(limit, 100),
             )
@@ -703,12 +717,10 @@ class MCPHubspotConnector:
             else:
                 raise ImportError("HubSpot SDK not available")
 
-            filter_group = FilterGroup(
-                filters=[Filter(property_name="email", operator="CONTAINS_TOKEN", value=query)]
-            )
+            filters = [{"propertyName": "email", "operator": "CONTAINS_TOKEN", "value": query}]
 
             search_request = PublicObjectSearchRequest(
-                filter_groups=[filter_group],
+                filter_groups=[{"filters": filters}],
                 properties=properties,
                 limit=min(limit, 100),
             )
@@ -756,12 +768,10 @@ class MCPHubspotConnector:
             else:
                 raise ImportError("HubSpot SDK not available")
 
-            filter_group = FilterGroup(
-                filters=[Filter(property_name="email", operator="EQ", value=email)]
-            )
+            filters = [{"propertyName": "email", "operator": "EQ", "value": email}]
 
             search_request = PublicObjectSearchRequest(
-                filter_groups=[filter_group], properties=properties, limit=1
+                filter_groups=[{"filters": filters}], properties=properties, limit=1
             )
 
             response = client.crm.contacts.search_api.do_search(search_request)
@@ -1207,42 +1217,72 @@ class MCPHubspotConnector:
         if pipeline_ids or timeframe:
             filters = []
 
-            # Add pipeline filter
+            # Add pipeline filter - convert to strings
             if pipeline_ids:
-                filters.append(Filter(property_name="pipeline", operator="IN", values=pipeline_ids))
-
-            # Add date range filter
-            if timeframe and timeframe.get("start") and timeframe.get("end"):
+                # Ensure pipeline IDs are strings
+                string_pipeline_ids = [str(pid) for pid in pipeline_ids]
                 filters.append(
-                    Filter(
-                        property_name="createdate",
-                        operator="BETWEEN",
-                        value=timeframe["start"],
-                        high_value=timeframe["end"],
-                    )
+                    {"propertyName": "pipeline", "operator": "IN", "values": string_pipeline_ids}
                 )
 
-            filter_group = FilterGroup(filters=filters)
+            # Add date range filter - convert ISO dates to millisecond timestamps
+            if timeframe and timeframe.get("start") and timeframe.get("end"):
+                import pendulum
+                
+                try:
+                    # Convert ISO strings to millisecond timestamps
+                    start_dt = pendulum.parse(timeframe["start"])
+                    end_dt = pendulum.parse(timeframe["end"]) 
+                    
+                    start_timestamp = str(int(start_dt.timestamp() * 1000))
+                    end_timestamp = str(int(end_dt.timestamp() * 1000))
+                    
+                    filters.append({
+                        "propertyName": "createdate",
+                        "operator": "BETWEEN",
+                        "value": start_timestamp,
+                        "highValue": end_timestamp,
+                    })
+                    
+                    self.logger.info(f"Date filter: {start_timestamp} to {end_timestamp}")
+                    
+                except Exception as e:
+                    self.logger.warning(f"Date conversion failed: {e}. Skipping date filter.")
+                    # Continue without date filter rather than failing
+
+            # Create search request with proper filter groups structure
             search_request = PublicObjectSearchRequest(
-                filter_groups=[filter_group], properties=properties, limit=100
+                filter_groups=[{"filters": filters}], properties=properties, limit=100
             )
 
-            # Paginate through search results
+            # Paginate through search results with error handling and 10k limit protection
             after = None
-            while True:
-                if after:
-                    search_request.after = after
+            max_deals = 9900  # Stay under the 10,000 limit
+            try:
+                while len(all_deals) < max_deals:
+                    if after:
+                        search_request.after = after
 
-                await self.rate_limiter.wait_if_needed()
-                search_response = deals_api.search_api.do_search(search_request)
+                    # Adjust batch size to not exceed the max limit
+                    remaining = max_deals - len(all_deals)
+                    search_request.limit = min(100, remaining)
 
-                if search_response and search_response.results:
-                    all_deals.extend(search_response.results)
+                    await self.rate_limiter.wait_if_needed()
+                    search_response = deals_api.search_api.do_search(search_request)
 
-                if search_response.paging and search_response.paging.next:
-                    after = search_response.paging.next.after
-                else:
-                    break
+                    if search_response and search_response.results:
+                        all_deals.extend(search_response.results)
+                        self.logger.info(f"Retrieved {len(search_response.results)} deals, total: {len(all_deals)}")
+
+                    if (search_response.paging and search_response.paging.next and 
+                        len(all_deals) < max_deals):
+                        after = search_response.paging.next.after
+                    else:
+                        break
+
+            except Exception as e:
+                self.logger.error(f"Search API failed with filters: {e}")
+                raise
 
         else:
             # Get all deals without filters using basic_api.get_page
@@ -1417,8 +1457,12 @@ class MCPHubspotConnector:
                 "data": {
                     "segments": segmentation_result["segment_profiles"],
                     "segmentation_quality": segmentation_result["quality_metrics"],
-                    "contact_assignments": segmentation_result["segments"],  # Individual contact-to-segment mappings
-                    "segment_characteristics": segmentation_result.get("segment_profiles", []),  # Segment profiles contain characteristics
+                    "contact_assignments": segmentation_result[
+                        "segments"
+                    ],  # Individual contact-to-segment mappings
+                    "segment_characteristics": segmentation_result.get(
+                        "segment_profiles", []
+                    ),  # Segment profiles contain characteristics
                 },
                 "insights": segmentation_insights["insights"],
                 "recommendations": segmentation_insights["recommendations"],
@@ -1455,9 +1499,7 @@ class MCPHubspotConnector:
             historical_timeframe = self._get_historical_timeframe(forecast_period)
 
             # Get historical and current pipeline data
-            historical_deals = await self._get_deals_with_sdk(
-                timeframe=historical_timeframe
-            )
+            historical_deals = await self._get_deals_with_sdk(timeframe=historical_timeframe)
             current_pipeline = await self._get_deals_with_sdk()
 
             # Revenue forecasting through analytics engine
@@ -1618,36 +1660,57 @@ class MCPHubspotConnector:
 
     # ============ UTILITY FUNCTIONS ============
 
-    async def _get_contacts_with_advanced_criteria(self, criteria: Dict[str, Any], max_contacts: int = 1000) -> List[Any]:
+    async def _get_contacts_with_advanced_criteria(
+        self, criteria: Dict[str, Any], max_contacts: int = 1000
+    ) -> List[Any]:
         """Enhanced contact search with complex filtering"""
 
         filters = []
         self.logger.info(f"Building filters for criteria: {criteria}")
 
-        # Date range filters
+        # Date range filters - convert ISO to timestamps
         if "date_range" in criteria:
-            filters.append({
-                "propertyName": "createdate",
-                "operator": "BETWEEN",
-                "value": criteria["date_range"]["start"],
-                "highValue": criteria["date_range"]["end"],
-            })
+            import pendulum
+            
+            try:
+                # Convert ISO strings to millisecond timestamps
+                start_dt = pendulum.parse(criteria["date_range"]["start"])
+                end_dt = pendulum.parse(criteria["date_range"]["end"])
+                
+                start_timestamp = str(int(start_dt.timestamp() * 1000))
+                end_timestamp = str(int(end_dt.timestamp() * 1000))
+                
+                filters.append({
+                    "propertyName": "createdate",
+                    "operator": "BETWEEN",
+                    "value": start_timestamp,
+                    "highValue": end_timestamp,
+                })
+                
+                self.logger.info(f"Advanced contact date filter: {start_timestamp} to {end_timestamp}")
+                
+            except Exception as e:
+                self.logger.warning(f"Advanced date conversion failed: {e}. Skipping date filter.")
 
         # Lifecycle stage filters
         if "lifecycle_stages" in criteria:
-            filters.append({
-                "propertyName": "lifecyclestage",
-                "operator": "IN",
-                "values": criteria["lifecycle_stages"],
-            })
+            filters.append(
+                {
+                    "propertyName": "lifecyclestage",
+                    "operator": "IN",
+                    "values": criteria["lifecycle_stages"],
+                }
+            )
 
         # Lead score filters
         if "min_lead_score" in criteria:
-            filters.append({
-                "propertyName": "hubspotscore",
-                "operator": "GTE",
-                "value": str(criteria["min_lead_score"]),
-            })
+            filters.append(
+                {
+                    "propertyName": "hubspotscore",
+                    "operator": "GTE",
+                    "value": str(criteria["min_lead_score"]),
+                }
+            )
 
         # Engagement score filters (use hubspotscore as proxy)
         # Note: Making this less restrictive for better results
@@ -1655,18 +1718,24 @@ class MCPHubspotConnector:
             if "min" in criteria["engagement_score"]:
                 # Use a lower threshold to get more contacts
                 min_score = max(1, criteria["engagement_score"]["min"])
-                filters.append({
-                    "propertyName": "hubspotscore",
-                    "operator": "GTE",
-                    "value": str(min_score),  # Use direct value instead of scaling
-                })
+                filters.append(
+                    {
+                        "propertyName": "hubspotscore",
+                        "operator": "GTE",
+                        "value": str(min_score),  # Use direct value instead of scaling
+                    }
+                )
                 self.logger.info(f"Added engagement score filter: hubspotscore >= {min_score}")
             if "max" in criteria["engagement_score"]:
-                filters.append({
-                    "propertyName": "hubspotscore",
-                    "operator": "LTE", 
-                    "value": str(criteria["engagement_score"]["max"] * 20),  # More generous scaling
-                })
+                filters.append(
+                    {
+                        "propertyName": "hubspotscore",
+                        "operator": "LTE",
+                        "value": str(
+                            criteria["engagement_score"]["max"] * 20
+                        ),  # More generous scaling
+                    }
+                )
 
         # Skip lifetime value filters for now as they might be too restrictive
         # and the proxy property might not exist
@@ -1676,28 +1745,43 @@ class MCPHubspotConnector:
         # Execute search with pagination
         self.logger.info(f"Executing search with {len(filters)} filters")
         contacts = await self._execute_advanced_search(filters, max_contacts)
-        
+
         # Fallback: if no contacts found with strict criteria, try with just date range or no filters
         if not contacts and len(filters) > 1:
-            self.logger.info("No contacts found with full criteria, trying fallback with date range only")
+            self.logger.info(
+                "No contacts found with full criteria, trying fallback with date range only"
+            )
             fallback_filters = []
-            
+
             # Try with just date range if it exists
             if "date_range" in criteria:
-                fallback_filters.append({
-                    "propertyName": "createdate",
-                    "operator": "BETWEEN",
-                    "value": criteria["date_range"]["start"],
-                    "highValue": criteria["date_range"]["end"],
-                })
-            
+                import pendulum
+                
+                try:
+                    # Convert ISO strings to millisecond timestamps
+                    start_dt = pendulum.parse(criteria["date_range"]["start"])
+                    end_dt = pendulum.parse(criteria["date_range"]["end"])
+                    
+                    start_timestamp = str(int(start_dt.timestamp() * 1000))
+                    end_timestamp = str(int(end_dt.timestamp() * 1000))
+                    
+                    fallback_filters.append({
+                        "propertyName": "createdate",
+                        "operator": "BETWEEN",
+                        "value": start_timestamp,
+                        "highValue": end_timestamp,
+                    })
+                    
+                except Exception as e:
+                    self.logger.warning(f"Fallback date conversion failed: {e}. Using no filters.")
+
             contacts = await self._execute_advanced_search(fallback_filters, max_contacts)
-            
+
             # Final fallback: get any contacts if still empty
             if not contacts:
                 self.logger.info("No contacts found with date range, getting recent contacts")
                 contacts = await self._execute_advanced_search([], min(max_contacts, 100))
-        
+
         self.logger.info(f"Found {len(contacts)} contacts for segmentation")
         return contacts
 
@@ -1707,14 +1791,16 @@ class MCPHubspotConnector:
         all_contacts = []
         after = None
         batch_limit = 100
-        
-        self.logger.info(f"Starting search with {len(filters)} filters, max_contacts={max_contacts}")
+
+        self.logger.info(
+            f"Starting search with {len(filters)} filters, max_contacts={max_contacts}"
+        )
 
         while len(all_contacts) < max_contacts:
             # Calculate how many more contacts we need, capped at batch_limit
             remaining_contacts = max_contacts - len(all_contacts)
             current_limit = min(batch_limit, remaining_contacts)
-            
+
             # Build search request properties
             properties = [
                 "email",
@@ -1727,18 +1813,15 @@ class MCPHubspotConnector:
                 "hubspotscore",
                 "hs_lead_status",
             ]
-            
+
             # Build filter groups if we have filters
             filter_groups = []
             if filters:
                 filter_groups = [{"filters": filters}]
-            
+
             # Create the search request object
             search_request = PublicObjectSearchRequest(
-                properties=properties,
-                limit=current_limit,
-                filter_groups=filter_groups,
-                after=after
+                properties=properties, limit=current_limit, filter_groups=filter_groups, after=after
             )
 
             await self.rate_limiter.wait_if_needed()
@@ -1750,7 +1833,7 @@ class MCPHubspotConnector:
 
                 batch_count = len(response.results) if response.results else 0
                 self.logger.info(f"API returned {batch_count} contacts in this batch")
-                
+
                 if response.results:
                     all_contacts.extend(response.results)
 
@@ -1767,7 +1850,7 @@ class MCPHubspotConnector:
 
     def _get_historical_timeframe(self, forecast_period: str) -> Dict[str, str]:
         """Generate historical training period - independent of forecast period
-        
+
         Uses best practices for historical data collection:
         - Minimum 6 months for short forecasts
         - Up to 2 years for longer forecasts
@@ -1812,4 +1895,3 @@ class MCPHubspotConnector:
 
         start = now.subtract(days=historical_days)
         return {"start": start.to_iso8601_string(), "end": now.to_iso8601_string()}
-
