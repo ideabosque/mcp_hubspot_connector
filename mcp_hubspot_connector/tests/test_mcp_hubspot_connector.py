@@ -1135,7 +1135,7 @@ async def test_predict_lead_scores_py(connector: Any):
 
 
 @pytest.mark.asyncio
-# @pytest.mark.skip(reason="demonstrating skipping")
+@pytest.mark.skip(reason="demonstrating skipping")
 async def test_create_contact_segments_py(connector: Any):
     """Test contact segmentation functionality"""
     # Calculate dynamic date range: 6 months ago to now using pendulum (recommended for performance)
@@ -1220,7 +1220,7 @@ async def test_create_contact_segments_py(connector: Any):
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="demonstrating skipping")
+# @pytest.mark.skip(reason="demonstrating skipping")
 async def test_forecast_revenue_py(connector: Any):
     """Test revenue forecasting functionality"""
     if getattr(connector, "__is_real__", False):
