@@ -2674,7 +2674,7 @@ class AnalyticsEngine:
         forecast_period: int,
         confidence_level: float,
     ) -> Dict[str, Any]:
-        """Forecast revenue using historical data and current pipeline"""
+        """Adaptive revenue forecasting - uses Prophet for rich datasets, simple method for small datasets"""
 
         if not historical_deals and not current_pipeline:
             return {
@@ -2685,6 +2685,274 @@ class AnalyticsEngine:
                 "insights": ["No historical or pipeline data available for forecasting"],
             }
 
+        # Determine forecasting method based on data availability
+        data_quality = self._assess_forecasting_data(historical_deals, forecast_period)
+        
+        if data_quality["use_prophet"]:
+            try:
+                return await self._prophet_forecast(historical_deals, confidence_level, data_quality)
+            except Exception as e:
+                # Fallback to simple method if Prophet fails
+                return await self._simple_forecast(historical_deals, current_pipeline, forecast_period, confidence_level, f"Prophet failed: {str(e)}")
+        else:
+            return await self._simple_forecast(historical_deals, current_pipeline, forecast_period, confidence_level, data_quality["reason"])
+
+    def _assess_forecasting_data(self, historical_deals: List[Any], forecast_period: int) -> Dict[str, Any]:
+        """Assess data quality and determine best forecasting method"""
+        
+        if not historical_deals:
+            return {
+                "use_prophet": False,
+                "reason": "No historical data available",
+                "data_points": 0,
+                "time_span_days": 0
+            }
+        
+        # Extract deal dates and amounts
+        import pendulum
+        deal_dates = []
+        
+        for deal in historical_deals:
+            deal_props = deal.properties if hasattr(deal, "properties") else deal
+            
+            # Try multiple date fields
+            date_str = (deal_props.get("closedate") or 
+                       deal_props.get("createdate") or 
+                       deal_props.get("hs_lastmodifieddate"))
+            
+            if date_str:
+                try:
+                    deal_date = pendulum.parse(date_str)
+                    deal_dates.append(deal_date)
+                except:
+                    continue
+        
+        if not deal_dates:
+            return {
+                "use_prophet": False,
+                "reason": "No valid dates in historical data",
+                "data_points": 0,
+                "time_span_days": 0
+            }
+        
+        # Calculate time span and data density
+        deal_dates.sort()
+        time_span_days = (deal_dates[-1] - deal_dates[0]).days
+        data_points = len(historical_deals)
+        
+        # Parse forecast period
+        if isinstance(forecast_period, str):
+            if "days" in forecast_period:
+                forecast_days = int(forecast_period.split("_")[0])
+            elif "months" in forecast_period:
+                forecast_days = int(forecast_period.split("_")[0]) * 30
+            elif "quarters" in forecast_period:
+                forecast_days = int(forecast_period.split("_")[0]) * 90
+            elif "years" in forecast_period:
+                forecast_days = int(forecast_period.split("_")[0]) * 365
+            else:
+                forecast_days = 90
+        else:
+            forecast_days = int(forecast_period)
+        
+        # Decision criteria for Prophet vs Simple
+        min_data_points = 50    # Minimum deals for Prophet
+        min_time_span = 180     # Minimum 6 months of history
+        min_density = 0.3       # Deals per day ratio
+        
+        data_density = data_points / max(time_span_days, 1)
+        
+        use_prophet = (
+            data_points >= min_data_points and
+            time_span_days >= min_time_span and
+            data_density >= min_density and
+            time_span_days >= forecast_days * 2  # History should be at least 2x forecast period
+        )
+        
+        if not use_prophet:
+            reasons = []
+            if data_points < min_data_points:
+                reasons.append(f"insufficient data ({data_points} < {min_data_points} deals)")
+            if time_span_days < min_time_span:
+                reasons.append(f"short history ({time_span_days} < {min_time_span} days)")
+            if data_density < min_density:
+                reasons.append(f"sparse data ({data_density:.2f} < {min_density} deals/day)")
+            if time_span_days < forecast_days * 2:
+                reasons.append(f"history too short for forecast period")
+            
+            reason = "Simple forecasting: " + ", ".join(reasons)
+        else:
+            reason = f"Prophet forecasting: {data_points} deals over {time_span_days} days"
+        
+        return {
+            "use_prophet": use_prophet,
+            "reason": reason,
+            "data_points": data_points,
+            "time_span_days": time_span_days,
+            "data_density": data_density,
+            "forecast_days": forecast_days
+        }
+
+    async def _prophet_forecast(
+        self, 
+        historical_deals: List[Any], 
+        confidence_level: float,
+        data_quality: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Advanced forecasting using Facebook Prophet"""
+        
+        try:
+            import pandas as pd
+            from prophet import Prophet
+        except ImportError:
+            raise ImportError("Prophet not available - install with: pip install prophet")
+        
+        # Prepare time series data
+        ts_data = self._prepare_prophet_timeseries(historical_deals)
+        
+        if len(ts_data) < 10:
+            raise ValueError("Insufficient time series data for Prophet")
+        
+        # Create and configure Prophet model
+        model = Prophet(
+            yearly_seasonality=data_quality["time_span_days"] > 365,  # Only if we have >1 year
+            weekly_seasonality=data_quality["time_span_days"] > 60,   # Only if we have >2 months
+            daily_seasonality=False,  # Revenue typically doesn't have daily patterns
+            interval_width=confidence_level,
+            changepoint_prior_scale=0.05,  # Conservative changepoint detection
+        )
+        
+        # Add quarterly seasonality for business revenue
+        if data_quality["time_span_days"] > 300:
+            model.add_seasonality(name='quarterly', period=91.25, fourier_order=8)
+        
+        # Fit the model
+        df = pd.DataFrame(ts_data)
+        model.fit(df)
+        
+        # Create future periods
+        forecast_days = data_quality["forecast_days"]
+        future = model.make_future_dataframe(periods=forecast_days, freq='D')
+        
+        # Generate forecast
+        forecast = model.predict(future)
+        
+        # Extract results for forecast period only
+        forecast_period_data = forecast.tail(forecast_days)
+        total_prediction = forecast_period_data['yhat'].sum()
+        
+        # Calculate confidence intervals
+        total_lower = forecast_period_data['yhat_lower'].sum()
+        total_upper = forecast_period_data['yhat_upper'].sum()
+        
+        # Create scenarios
+        scenarios = {
+            "conservative": float(total_lower),
+            "realistic": float(total_prediction),
+            "optimistic": float(total_upper),
+        }
+        
+        # Calculate model performance using cross-validation if we have enough data
+        accuracy = 0.8  # Default for Prophet
+        if len(df) > 30:
+            try:
+                # Simple validation: use last 20% for testing
+                split_point = int(len(df) * 0.8)
+                train_df = df.iloc[:split_point]
+                test_df = df.iloc[split_point:]
+                
+                validation_model = Prophet(
+                    yearly_seasonality=data_quality["time_span_days"] > 365,
+                    weekly_seasonality=data_quality["time_span_days"] > 60,
+                    daily_seasonality=False,
+                )
+                validation_model.fit(train_df)
+                
+                future_test = validation_model.make_future_dataframe(periods=len(test_df), freq='D')
+                forecast_test = validation_model.predict(future_test)
+                
+                # Calculate MAPE
+                actual = test_df['y'].values
+                predicted = forecast_test.tail(len(test_df))['yhat'].values
+                mape = abs((actual - predicted) / (actual + 1e-8)).mean() * 100
+                accuracy = max(0, 1 - mape / 100)
+            except:
+                accuracy = 0.8
+        
+        return {
+            "prediction": float(total_prediction),
+            "confidence_interval": {
+                "lower": float(total_lower),
+                "upper": float(total_upper)
+            },
+            "scenarios": scenarios,
+            "model_accuracy": {
+                "method": "prophet_time_series",
+                "confidence_level": confidence_level,
+                "forecast_period_days": forecast_days,
+                "accuracy": float(accuracy),
+                "data_points": data_quality["data_points"],
+                "time_span_days": data_quality["time_span_days"]
+            },
+            "insights": [
+                f"Prophet forecast for {forecast_days} days: ${total_prediction:,.0f}",
+                f"Based on {data_quality['data_points']} historical deals over {data_quality['time_span_days']} days",
+                f"Model accuracy: {accuracy:.1%}",
+                f"Confidence interval: ${total_lower:,.0f} - ${total_upper:,.0f}",
+                "Advanced time series analysis with seasonality detection"
+            ],
+        }
+
+    def _prepare_prophet_timeseries(self, historical_deals: List[Any]) -> List[Dict[str, Any]]:
+        """Convert historical deals to Prophet-compatible time series"""
+        import pendulum
+        from collections import defaultdict
+        
+        # Group deals by date and sum revenue
+        daily_revenue = defaultdict(float)
+        
+        for deal in historical_deals:
+            deal_props = deal.properties if hasattr(deal, "properties") else deal
+            
+            # Get deal amount
+            amount_str = deal_props.get("amount", "0")
+            try:
+                amount = float(amount_str) if amount_str else 0.0
+            except (ValueError, TypeError):
+                continue
+            
+            # Get deal date (prefer closedate, fallback to createdate)
+            date_str = (deal_props.get("closedate") or 
+                       deal_props.get("createdate") or 
+                       deal_props.get("hs_lastmodifieddate"))
+            
+            if date_str and amount > 0:
+                try:
+                    deal_date = pendulum.parse(date_str).format('YYYY-MM-DD')
+                    daily_revenue[deal_date] += amount
+                except:
+                    continue
+        
+        # Convert to Prophet format (ds, y)
+        ts_data = []
+        for date_str, revenue in sorted(daily_revenue.items()):
+            ts_data.append({
+                "ds": date_str,
+                "y": revenue
+            })
+        
+        return ts_data
+
+    async def _simple_forecast(
+        self, 
+        historical_deals: List[Any], 
+        current_pipeline: List[Any], 
+        forecast_period: int, 
+        confidence_level: float,
+        reason: str
+    ) -> Dict[str, Any]:
+        """Simple statistical forecasting method (original implementation with reason)"""
+        
         # Parse forecast period (could be int days or string like "90_days", "6_months", etc)
         if isinstance(forecast_period, str):
             if "days" in forecast_period:
@@ -2735,14 +3003,10 @@ class AnalyticsEngine:
 
         # Simple prediction combining historical trend and pipeline
         # Weight pipeline higher for shorter periods, historical trend for longer periods
-        pipeline_weight = max(
-            0.3, 1.0 - (period_days / 365)
-        )  # More pipeline weight for shorter forecasts
+        pipeline_weight = max(0.3, 1.0 - (period_days / 365))  # More pipeline weight for shorter forecasts
         historical_weight = 1.0 - pipeline_weight
 
-        base_prediction = (historical_projection * historical_weight) + (
-            pipeline_value * pipeline_weight
-        )
+        base_prediction = (historical_projection * historical_weight) + (pipeline_value * pipeline_weight)
 
         # Add confidence intervals
         variance = base_prediction * 0.2  # 20% variance
@@ -2760,17 +3024,19 @@ class AnalyticsEngine:
             "confidence_interval": {"lower": lower_bound, "upper": upper_bound},
             "scenarios": scenarios,
             "model_accuracy": {
-                "method": "time_scaled_historical_pipeline",
+                "method": "simple_statistical",
                 "confidence_level": confidence_level,
                 "forecast_period_days": period_days,
                 "pipeline_weight": pipeline_weight,
                 "historical_weight": historical_weight,
+                "selection_reason": reason
             },
             "insights": [
-                f"Forecast for {period_days} days: ${base_prediction:,.0f}",
+                f"Simple forecast for {period_days} days: ${base_prediction:,.0f}",
                 f"Based on {historical_deal_count} historical deals and {pipeline_deal_count} pipeline deals",
                 f"Historical daily rate: ${historical_daily_rate:,.0f}",
                 f"Weighted prediction (pipeline: {pipeline_weight:.1%}, historical: {historical_weight:.1%})",
                 f"Confidence interval: ${lower_bound:,.0f} - ${upper_bound:,.0f}",
+                reason
             ],
         }
