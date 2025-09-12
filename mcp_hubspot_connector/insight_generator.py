@@ -161,6 +161,235 @@ class InsightGenerator:
 
         return recommendations
 
+    async def analyze_revenue_forecast(self, forecast_result: Dict[str, Any]) -> Dict[str, List[str]]:
+        """Analyze revenue forecast and generate insights"""
+        insights = []
+        recommendations = []
+        
+        prediction = forecast_result.get("prediction", 0)
+        confidence_interval = forecast_result.get("confidence_interval", {})
+        scenarios = forecast_result.get("scenarios", {})
+        model_accuracy = forecast_result.get("model_accuracy", {})
+        
+        # Generate insights based on forecast data
+        if prediction > 0:
+            insights.append(f"Revenue forecast: ${prediction:,.0f}")
+            
+            # Confidence interval analysis
+            lower = confidence_interval.get("lower", 0)
+            upper = confidence_interval.get("upper", 0)
+            uncertainty = (upper - lower) / prediction * 100 if prediction > 0 else 0
+            
+            if uncertainty > 50:
+                insights.append("High forecast uncertainty - consider gathering more data")
+                recommendations.append("Improve data quality by updating deal probabilities and amounts")
+            elif uncertainty > 30:
+                insights.append("Moderate forecast uncertainty")
+                recommendations.append("Review pipeline deals for accuracy")
+            else:
+                insights.append("Forecast shows good confidence level")
+        
+        # Scenario analysis
+        if scenarios:
+            conservative = scenarios.get("conservative", 0)
+            optimistic = scenarios.get("optimistic", 0)
+            
+            insights.append(f"Conservative scenario: ${conservative:,.0f}")
+            insights.append(f"Optimistic scenario: ${optimistic:,.0f}")
+            
+            if optimistic > prediction * 1.5:
+                recommendations.append("Significant upside potential - focus on deal acceleration")
+            
+            if conservative < prediction * 0.7:
+                recommendations.append("Downside risk present - develop contingency plans")
+        
+        # Model accuracy insights
+        forecast_period_days = model_accuracy.get("forecast_period_days", 0)
+        pipeline_weight = model_accuracy.get("pipeline_weight", 0)
+        
+        if pipeline_weight > 0.7:
+            insights.append("Forecast heavily weighted on current pipeline")
+            recommendations.append("Focus on advancing existing deals to improve forecast accuracy")
+        elif pipeline_weight < 0.3:
+            insights.append("Forecast relies more on historical trends")
+            recommendations.append("Build stronger pipeline to improve predictability")
+        
+        if forecast_period_days > 90:
+            recommendations.append("Long-term forecast - monitor and update regularly")
+        elif forecast_period_days < 30:
+            recommendations.append("Short-term forecast - focus on deal closure activities")
+        
+        return {
+            "insights": insights,
+            "recommendations": recommendations
+        }
+
+    async def analyze_segmentation(self, segmentation_result: Dict[str, Any]) -> Dict[str, List[str]]:
+        """Analyze customer segmentation results and generate insights"""
+        insights = []
+        recommendations = []
+        
+        segments = segmentation_result.get("segments", [])
+        segment_profiles = segmentation_result.get("segment_profiles", [])
+        segmentation_type = segmentation_result.get("segmentation_type", "unknown")
+        quality_metrics = segmentation_result.get("quality_metrics", {})
+        
+        total_contacts = quality_metrics.get("total_contacts", len(segments))
+        num_segments = len(segment_profiles)
+        
+        # General segmentation insights
+        if total_contacts > 0:
+            insights.append(f"Segmented {total_contacts:,} contacts into {num_segments} segments")
+            
+            # Segment size distribution analysis
+            segment_sizes = [profile.get("size", 0) for profile in segment_profiles]
+            if segment_sizes:
+                largest_segment = max(segment_sizes)
+                smallest_segment = min(segment_sizes)
+                avg_segment_size = sum(segment_sizes) / len(segment_sizes)
+                
+                # Check for segment balance
+                size_ratio = largest_segment / max(smallest_segment, 1)
+                if size_ratio > 5:
+                    insights.append("Highly unbalanced segments - consider adjusting segmentation criteria")
+                    recommendations.append("Review segmentation parameters to create more balanced groups")
+                elif size_ratio < 2:
+                    insights.append("Well-balanced segment distribution")
+                
+                # Segment size insights
+                largest_pct = (largest_segment / total_contacts) * 100
+                if largest_pct > 60:
+                    insights.append(f"One segment dominates ({largest_pct:.1f}% of contacts)")
+                    recommendations.append("Consider increasing number of segments for better granularity")
+        
+        # Segmentation-specific insights
+        if segmentation_type == "behavioral":
+            insights.append("Behavioral segmentation based on engagement patterns")
+            
+            # Look for engagement patterns in segment profiles
+            high_engagement_segments = []
+            low_engagement_segments = []
+            
+            for profile in segment_profiles:
+                label = profile.get("label", "")
+                characteristics = profile.get("characteristics", {})
+                avg_engagement = characteristics.get("avg_engagement", 0)
+                
+                if avg_engagement > 8:
+                    high_engagement_segments.append(label)
+                elif avg_engagement < 2:
+                    low_engagement_segments.append(label)
+            
+            if high_engagement_segments:
+                insights.append(f"High engagement segments: {', '.join(high_engagement_segments)}")
+                recommendations.append("Focus retention campaigns on high-engagement segments")
+            
+            if low_engagement_segments:
+                insights.append(f"Low engagement segments: {', '.join(low_engagement_segments)}")
+                recommendations.append("Develop re-engagement campaigns for low-activity segments")
+        
+        elif segmentation_type == "rfm":
+            insights.append("RFM segmentation based on recency, frequency, and monetary value")
+            
+            # Look for champion and at-risk segments
+            for profile in segment_profiles:
+                label = profile.get("label", "")
+                size = profile.get("size", 0)
+                percentage = profile.get("percentage", 0)
+                characteristics = profile.get("characteristics", {})
+                
+                if "champion" in label.lower():
+                    insights.append(f"Champions segment: {size} contacts ({percentage:.1f}%)")
+                    recommendations.append("Maintain champion relationships with exclusive offers and personal attention")
+                
+                elif "at risk" in label.lower() or "risk" in label.lower():
+                    insights.append(f"At-risk segment: {size} contacts ({percentage:.1f}%)")
+                    recommendations.append("Implement immediate win-back campaigns for at-risk customers")
+                
+                elif "loyal" in label.lower():
+                    recommendations.append("Cross-sell and upsell opportunities in loyal customer segment")
+        
+        elif segmentation_type == "lifecycle":
+            insights.append("Lifecycle segmentation based on customer journey stages")
+            
+            # Analyze lifecycle distribution
+            opportunity_segment = None
+            lead_segment = None
+            customer_segment = None
+            
+            for profile in segment_profiles:
+                label = profile.get("label", "").lower()
+                size = profile.get("size", 0)
+                percentage = profile.get("percentage", 0)
+                
+                if "opportunity" in label:
+                    opportunity_segment = {"size": size, "percentage": percentage}
+                elif "lead" in label:
+                    lead_segment = {"size": size, "percentage": percentage}
+                elif "customer" in label:
+                    customer_segment = {"size": size, "percentage": percentage}
+            
+            if opportunity_segment and opportunity_segment["percentage"] > 20:
+                insights.append(f"High opportunity volume: {opportunity_segment['percentage']:.1f}% of contacts")
+                recommendations.append("Focus sales resources on converting high-volume opportunities")
+            
+            if lead_segment and lead_segment["percentage"] > 40:
+                insights.append(f"Large lead pipeline: {lead_segment['percentage']:.1f}% of contacts")
+                recommendations.append("Implement lead nurturing campaigns to advance pipeline")
+            
+            if customer_segment and customer_segment["percentage"] < 15:
+                insights.append(f"Low customer conversion rate: {customer_segment['percentage']:.1f}%")
+                recommendations.append("Analyze conversion bottlenecks and improve sales process")
+        
+        elif segmentation_type == "value_based":
+            insights.append("Value-based segmentation by customer lifetime value and revenue potential")
+            
+            # Look for high-value and enterprise segments
+            for profile in segment_profiles:
+                label = profile.get("label", "")
+                size = profile.get("size", 0)
+                percentage = profile.get("percentage", 0)
+                characteristics = profile.get("characteristics", {})
+                
+                if "enterprise" in label.lower():
+                    insights.append(f"Enterprise segment: {size} contacts ({percentage:.1f}%)")
+                    recommendations.append("Assign dedicated account management for enterprise clients")
+                
+                elif "high value" in label.lower():
+                    avg_revenue = characteristics.get("avg_total_revenue", 0)
+                    insights.append(f"High-value segment: ${avg_revenue:,.0f} average revenue")
+                    recommendations.append("Develop premium service offerings for high-value customers")
+                
+                elif "prospect" in label.lower():
+                    if percentage > 30:
+                        insights.append(f"Large prospect pool: {percentage:.1f}% of contacts")
+                        recommendations.append("Implement systematic prospect qualification and nurturing")
+        
+        # Quality metrics insights
+        if quality_metrics:
+            silhouette_score = quality_metrics.get("silhouette_score", 0)
+            if silhouette_score > 0.7:
+                insights.append("High segmentation quality - distinct, well-separated groups")
+            elif silhouette_score < 0.3:
+                insights.append("Low segmentation quality - consider different approach or parameters")
+                recommendations.append("Experiment with different segmentation methods or adjust parameters")
+        
+        # General recommendations based on segment count
+        if num_segments < 3:
+            recommendations.append("Consider increasing segments for more targeted marketing approaches")
+        elif num_segments > 8:
+            recommendations.append("Consider consolidating segments to avoid over-complexity in campaigns")
+        
+        # Actionability recommendations
+        recommendations.append("Create segment-specific content and messaging strategies")
+        recommendations.append("Set up automated workflows for each segment's typical customer journey")
+        recommendations.append("Monitor segment migration patterns to identify growth opportunities")
+        
+        return {
+            "insights": insights,
+            "recommendations": recommendations
+        }
+
     async def analyze_predictions(self, prediction_result: Dict[str, Any]) -> Dict[str, List[str]]:
         """Analyze prediction results and generate insights"""
 
