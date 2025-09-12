@@ -1448,11 +1448,13 @@ class MCPHubspotConnector:
         try:
             forecast_period = params.get("forecastPeriod", "90_days")
             confidence_level = params.get("confidenceLevel", 0.95)
-            timeframe = params.get("timeframe", {})
+
+            # Get historical timeframe for training data
+            historical_timeframe = self._get_historical_timeframe(forecast_period)
 
             # Get historical and current pipeline data
             historical_deals = await self._get_deals_with_sdk(
-                timeframe=self._get_historical_timeframe(forecast_period)
+                timeframe=historical_timeframe
             )
             current_pipeline = await self._get_deals_with_sdk()
 
@@ -1701,26 +1703,51 @@ class MCPHubspotConnector:
         return all_contacts
 
     def _get_historical_timeframe(self, forecast_period: str) -> Dict[str, str]:
-        """Generate historical timeframe based on forecast period"""
-
-        from datetime import datetime, timedelta
-
+        """Generate historical training period - independent of forecast period
+        
+        Uses best practices for historical data collection:
+        - Minimum 6 months for short forecasts
+        - Up to 2 years for longer forecasts
+        - Ensures sufficient data for reliable predictions
+        """
         import pendulum
 
         now = pendulum.now("UTC")
 
-        # Determine historical period (typically 3x the forecast period)
-        if forecast_period == "30_days":
-            start = now.subtract(days=90)
-        elif forecast_period == "60_days":
-            start = now.subtract(days=180)
-        elif forecast_period == "90_days":
-            start = now.subtract(days=270)
-        elif forecast_period == "180_days":
-            start = now.subtract(days=540)
+        # Parse forecast period to understand prediction horizon
+        if isinstance(forecast_period, str):
+            if "days" in forecast_period:
+                forecast_days = int(forecast_period.split("_")[0])
+            elif "months" in forecast_period:
+                forecast_days = int(forecast_period.split("_")[0]) * 30
+            elif "quarters" in forecast_period:
+                forecast_days = int(forecast_period.split("_")[0]) * 90
+            elif "years" in forecast_period:
+                forecast_days = int(forecast_period.split("_")[0]) * 365
+            else:
+                forecast_days = 90  # Default
         else:
-            start = now.subtract(days=365)  # Default 1 year
+            forecast_days = int(forecast_period)
 
+        # Determine historical training period based on best practices
+        # Rule: Use 4-8x the forecast period, with reasonable min/max bounds
+        if forecast_days <= 30:
+            # Short forecast: use 6 months of history
+            historical_days = 180
+        elif forecast_days <= 90:
+            # 3-month forecast: use 1 year of history
+            historical_days = 365
+        elif forecast_days <= 180:
+            # 6-month forecast: use 18 months of history
+            historical_days = 540
+        elif forecast_days <= 365:
+            # 1-year forecast: use 2 years of history
+            historical_days = 730
+        else:
+            # Long forecast: use 2 years max (data gets stale beyond that)
+            historical_days = 730
+
+        start = now.subtract(days=historical_days)
         return {"start": start.to_iso8601_string(), "end": now.to_iso8601_string()}
 
     # ============ SDK HELPER METHODS ============
