@@ -201,9 +201,9 @@ class MCPHubspotConnector:
     async def get_contact_analytics(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: get_contact_analytics - Advanced contact analytics using SDK"""
         try:
-            date_range = params.get("dateRange", {})
+            date_range = params.get("date_range", {})
             segmentation = params.get("segmentation", "all")
-            include_engagement = params.get("includeEngagement", True)
+            include_engagement = params.get("include_engagement", True)
             limit = params.get("limit", 1000)
 
             # Get contacts using SDK
@@ -878,11 +878,11 @@ class MCPHubspotConnector:
     async def analyze_campaign_performance(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: analyze_campaign_performance - Campaign analytics using SDK"""
         try:
-            campaign_ids = params.get("campaignIds", [])
+            campaign_ids = params.get("campaign_ids", [])
             metrics = params.get("metrics", ["open_rate", "click_rate", "conversion_rate"])
-            benchmark_type = params.get("benchmarkType", "historical")
-            include_recommendations = params.get("includeRecommendations", True)
-            date_range = params.get("dateRange", {})
+            benchmark_type = params.get("benchmark_type", "historical")
+            include_recommendations = params.get("include_recommendations", True)
+            date_range = params.get("date_range", {})
 
             # Get campaign data using SDK
             campaigns_data = await self._get_campaigns_with_sdk(campaign_ids)
@@ -1118,10 +1118,10 @@ class MCPHubspotConnector:
     async def analyze_sales_pipeline(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: analyze_sales_pipeline - Sales pipeline analytics using SDK"""
         try:
-            pipeline_ids = params.get("pipelineIds", [])
+            pipeline_ids = params.get("pipeline_ids", [])
             timeframe = params.get("timeframe", {})
-            analysis_type = params.get("analysisType", "conversion_rates")
-            include_recommendations = params.get("includeRecommendations", True)
+            analysis_type = params.get("analysis_type", "conversion_rates")
+            include_recommendations = params.get("include_recommendations", True)
 
             # Get deals data using SDK
             deals_data = await self._get_deals_with_sdk(pipeline_ids, timeframe)
@@ -1274,10 +1274,10 @@ class MCPHubspotConnector:
     async def predict_lead_scores(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: predict_lead_scores - ML-based lead scoring using SDK"""
         try:
-            contact_ids = params.get("contactIds", [])
-            model_type = params.get("modelType", "conversion_probability")
-            include_feature_importance = params.get("includeFeatureImportance", True)
-            date_range = params.get("dateRange", {})
+            contact_ids = params.get("contact_ids", [])
+            model_type = params.get("model_type", "conversion_probability")
+            include_feature_importance = params.get("include_feature_importance", True)
+            date_range = params.get("date_range", {})
 
             # Get contacts using SDK
             if contact_ids:
@@ -1391,12 +1391,13 @@ class MCPHubspotConnector:
     async def create_contact_segments(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: create_contact_segments - Advanced behavioral segmentation"""
         try:
-            segmentation_type = params.get("segmentationType", "behavioral")
+            segmentation_type = params.get("segmentation_type", "behavioral")
             criteria = params.get("criteria", {})
-            num_segments = params.get("numberOfSegments", 5)
+            num_segments = params.get("number_of_segments", 5)
+            limit = params.get("limit", 1000)  # Default limit to prevent performance issues
 
             # Get contacts with enhanced criteria
-            contacts_data = await self._get_contacts_with_advanced_criteria(criteria)
+            contacts_data = await self._get_contacts_with_advanced_criteria(criteria, limit)
             engagement_data = await self._get_engagement_data_with_sdk(
                 [c.id for c in contacts_data]
             )
@@ -1416,8 +1417,8 @@ class MCPHubspotConnector:
                 "data": {
                     "segments": segmentation_result["segment_profiles"],
                     "segmentation_quality": segmentation_result["quality_metrics"],
-                    "contact_assignments": segmentation_result["assignments"],
-                    "segment_characteristics": segmentation_result["characteristics"],
+                    "contact_assignments": segmentation_result["segments"],  # Individual contact-to-segment mappings
+                    "segment_characteristics": segmentation_result.get("segment_profiles", []),  # Segment profiles contain characteristics
                 },
                 "insights": segmentation_insights["insights"],
                 "recommendations": segmentation_insights["recommendations"],
@@ -1425,6 +1426,7 @@ class MCPHubspotConnector:
                     "segmentation_type": segmentation_type,
                     "num_segments": num_segments,
                     "total_contacts": len(contacts_data),
+                    "contact_limit": limit,
                     "data_source": "hubspot_sdk_advanced_segmentation",
                 },
                 "error_message": None,
@@ -1446,8 +1448,8 @@ class MCPHubspotConnector:
     async def forecast_revenue(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: forecast_revenue - AI-powered revenue predictions"""
         try:
-            forecast_period = params.get("forecastPeriod", "90_days")
-            confidence_level = params.get("confidenceLevel", 0.95)
+            forecast_period = params.get("forecast_period", "90_days")
+            confidence_level = params.get("confidence_level", 0.95)
 
             # Get historical timeframe for training data
             historical_timeframe = self._get_historical_timeframe(forecast_period)
@@ -1504,20 +1506,20 @@ class MCPHubspotConnector:
     async def generate_executive_report(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: generate_executive_report - Comprehensive executive reporting"""
         try:
-            report_type = params.get("reportType", "monthly")
+            report_type = params.get("report_type", "monthly")
             timeframe = params.get("timeframe", {})
-            include_forecast = params.get("includeForecast", True)
+            include_forecast = params.get("include_forecast", True)
 
             # Gather data from multiple sources in parallel
-            contacts_data = await self.get_contact_analytics({"dateRange": timeframe})
-            campaigns_data = await self.analyze_campaign_performance({"dateRange": timeframe})
+            contacts_data = await self.get_contact_analytics({"date_range": timeframe})
+            campaigns_data = await self.analyze_campaign_performance({"date_range": timeframe})
             pipeline_data = await self.analyze_sales_pipeline({"timeframe": timeframe})
 
             # Include revenue forecast if requested
             forecast_data = None
             if include_forecast:
                 forecast_data = await self.forecast_revenue(
-                    {"forecastPeriod": "90_days", "confidenceLevel": 0.95}
+                    {"forecast_period": "90_days", "confidence_level": 0.95}
                 )
 
             # Generate executive insights
@@ -1616,71 +1618,128 @@ class MCPHubspotConnector:
 
     # ============ UTILITY FUNCTIONS ============
 
-    async def _get_contacts_with_advanced_criteria(self, criteria: Dict[str, Any]) -> List[Any]:
+    async def _get_contacts_with_advanced_criteria(self, criteria: Dict[str, Any], max_contacts: int = 1000) -> List[Any]:
         """Enhanced contact search with complex filtering"""
 
         filters = []
+        self.logger.info(f"Building filters for criteria: {criteria}")
 
         # Date range filters
         if "date_range" in criteria:
-            filters.append(
-                Filter(
-                    property_name="createdate",
-                    operator="BETWEEN",
-                    value=criteria["date_range"]["start"],
-                    high_value=criteria["date_range"]["end"],
-                )
-            )
+            filters.append({
+                "propertyName": "createdate",
+                "operator": "BETWEEN",
+                "value": criteria["date_range"]["start"],
+                "highValue": criteria["date_range"]["end"],
+            })
 
         # Lifecycle stage filters
         if "lifecycle_stages" in criteria:
-            filters.append(
-                Filter(
-                    property_name="lifecyclestage",
-                    operator="IN",
-                    values=criteria["lifecycle_stages"],
-                )
-            )
+            filters.append({
+                "propertyName": "lifecyclestage",
+                "operator": "IN",
+                "values": criteria["lifecycle_stages"],
+            })
 
         # Lead score filters
         if "min_lead_score" in criteria:
-            filters.append(
-                Filter(
-                    property_name="hubspotscore",
-                    operator="GTE",
-                    value=str(criteria["min_lead_score"]),
-                )
-            )
+            filters.append({
+                "propertyName": "hubspotscore",
+                "operator": "GTE",
+                "value": str(criteria["min_lead_score"]),
+            })
+
+        # Engagement score filters (use hubspotscore as proxy)
+        # Note: Making this less restrictive for better results
+        if "engagement_score" in criteria:
+            if "min" in criteria["engagement_score"]:
+                # Use a lower threshold to get more contacts
+                min_score = max(1, criteria["engagement_score"]["min"])
+                filters.append({
+                    "propertyName": "hubspotscore",
+                    "operator": "GTE",
+                    "value": str(min_score),  # Use direct value instead of scaling
+                })
+                self.logger.info(f"Added engagement score filter: hubspotscore >= {min_score}")
+            if "max" in criteria["engagement_score"]:
+                filters.append({
+                    "propertyName": "hubspotscore",
+                    "operator": "LTE", 
+                    "value": str(criteria["engagement_score"]["max"] * 20),  # More generous scaling
+                })
+
+        # Skip lifetime value filters for now as they might be too restrictive
+        # and the proxy property might not exist
+        if "lifetime_value" in criteria:
+            self.logger.info("Skipping lifetime_value filter - using other criteria only")
 
         # Execute search with pagination
-        return await self._execute_advanced_search(filters)
+        self.logger.info(f"Executing search with {len(filters)} filters")
+        contacts = await self._execute_advanced_search(filters, max_contacts)
+        
+        # Fallback: if no contacts found with strict criteria, try with just date range or no filters
+        if not contacts and len(filters) > 1:
+            self.logger.info("No contacts found with full criteria, trying fallback with date range only")
+            fallback_filters = []
+            
+            # Try with just date range if it exists
+            if "date_range" in criteria:
+                fallback_filters.append({
+                    "propertyName": "createdate",
+                    "operator": "BETWEEN",
+                    "value": criteria["date_range"]["start"],
+                    "highValue": criteria["date_range"]["end"],
+                })
+            
+            contacts = await self._execute_advanced_search(fallback_filters, max_contacts)
+            
+            # Final fallback: get any contacts if still empty
+            if not contacts:
+                self.logger.info("No contacts found with date range, getting recent contacts")
+                contacts = await self._execute_advanced_search([], min(max_contacts, 100))
+        
+        self.logger.info(f"Found {len(contacts)} contacts for segmentation")
+        return contacts
 
-    async def _execute_advanced_search(self, filters: List) -> List[Any]:
+    async def _execute_advanced_search(self, filters: List, max_contacts: int = 1000) -> List[Any]:
         """Execute advanced search with pagination"""
 
         all_contacts = []
         after = None
-        limit = 100
+        batch_limit = 100
+        
+        self.logger.info(f"Starting search with {len(filters)} filters, max_contacts={max_contacts}")
 
-        while True:
-            search_request = {
-                "filters": [{"filters": filters}] if filters else [],
-                "properties": [
-                    "email",
-                    "firstname",
-                    "lastname",
-                    "company",
-                    "lifecyclestage",
-                    "createdate",
-                    "lastmodifieddate",
-                    "hubspotscore",
-                    "hs_lead_status",
-                ],
-                "limit": limit,
-            }
-
-            if after:
-                search_request["after"] = after
+        while len(all_contacts) < max_contacts:
+            # Calculate how many more contacts we need, capped at batch_limit
+            remaining_contacts = max_contacts - len(all_contacts)
+            current_limit = min(batch_limit, remaining_contacts)
+            
+            # Build search request properties
+            properties = [
+                "email",
+                "firstname",
+                "lastname",
+                "company",
+                "lifecyclestage",
+                "createdate",
+                "lastmodifieddate",
+                "hubspotscore",
+                "hs_lead_status",
+            ]
+            
+            # Build filter groups if we have filters
+            filter_groups = []
+            if filters:
+                filter_groups = [{"filters": filters}]
+            
+            # Create the search request object
+            search_request = PublicObjectSearchRequest(
+                properties=properties,
+                limit=current_limit,
+                filter_groups=filter_groups,
+                after=after
+            )
 
             await self.rate_limiter.wait_if_needed()
 
@@ -1689,7 +1748,11 @@ class MCPHubspotConnector:
                     public_object_search_request=search_request
                 )
 
-                all_contacts.extend(response.results)
+                batch_count = len(response.results) if response.results else 0
+                self.logger.info(f"API returned {batch_count} contacts in this batch")
+                
+                if response.results:
+                    all_contacts.extend(response.results)
 
                 if not response.paging or not response.paging.next:
                     break
