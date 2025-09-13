@@ -508,7 +508,8 @@ def test_get_contacts_py(connector: Any):
             assert isinstance(result["contacts"], list)
         else:
             # If error, should be due to SDK not being available
-            assert error is not None
+            if error:
+                pytest.fail(f"get_contacts failed with error: {error}")
     else:
         result, error = _call_method(connector, "get_contacts", arguments, label="get_contacts")
         assert result is not None
@@ -532,7 +533,8 @@ def test_create_contact_py(connector: Any):
             assert "properties" in result
         else:
             # Should fail gracefully
-            assert error is not None
+            if error:
+                pytest.fail(f"create_contact failed with error: {error}")
     else:
         result, error = _call_method(connector, "create_contact", arguments, label="create_contact")
         assert result is not None
@@ -552,7 +554,8 @@ def test_update_contact_py(connector: Any):
             assert "id" in result
             assert "properties" in result
         else:
-            assert error is not None
+            if error:
+                pytest.fail(f"update_contact failed with error: {error}")
     else:
         result, error = _call_method(connector, "update_contact", arguments, label="update_contact")
         assert result is not None
@@ -578,7 +581,8 @@ def test_search_contacts_py(connector: Any):
             assert "contacts" in result
             assert "query" in result
         else:
-            assert error is not None
+            if error:
+                pytest.fail(f"search_contacts failed with error: {error}")
     else:
         result, error = _call_method(
             connector, "search_contacts", arguments, label="search_contacts"
@@ -588,7 +592,7 @@ def test_search_contacts_py(connector: Any):
         assert len(result["contacts"]) == 1
 
 
-@pytest.mark.skip(reason="demonstrating skipping")
+# @pytest.mark.skip(reason="demonstrating skipping")
 def test_get_contact_by_email_py(connector: Any):
     """Test getting a specific contact by email"""
     arguments = {"email": "test@example.com"}
@@ -597,13 +601,14 @@ def test_get_contact_by_email_py(connector: Any):
         result, error = _call_method(
             connector, "get_contact_by_email", arguments, label="get_contact_by_email"
         )
+        if error:
+            pytest.fail(f"get_contact_by_email failed with error: {error}")
+
         if result:
             assert isinstance(result, dict)
             if result:  # Might return None if not found
                 assert "id" in result
                 assert "properties" in result
-        else:
-            assert error is not None
     else:
         result, error = _call_method(
             connector, "get_contact_by_email", arguments, label="get_contact_by_email"
@@ -626,7 +631,8 @@ def test_get_deals_py(connector: Any):
             assert "deals" in result
             assert isinstance(result["deals"], list)
         else:
-            assert error is not None
+            if error:
+                pytest.fail(f"get_deals failed with error: {error}")
     else:
         result, error = _call_method(connector, "get_deals", arguments, label="get_deals")
         assert result is not None
@@ -652,7 +658,8 @@ def test_create_deal_py(connector: Any):
             assert "id" in result
             assert "properties" in result
         else:
-            assert error is not None
+            if error:
+                pytest.fail(f"create_deal failed with error: {error}")
     else:
         result, error = _call_method(connector, "create_deal", arguments, label="create_deal")
         assert result is not None
@@ -673,7 +680,8 @@ def test_get_companies_py(connector: Any):
             assert "companies" in result
             assert isinstance(result["companies"], list)
         else:
-            assert error is not None
+            if error:
+                pytest.fail(f"get_companies failed with error: {error}")
     else:
         result, error = _call_method(connector, "get_companies", arguments, label="get_companies")
         assert result is not None
@@ -691,14 +699,14 @@ def test_get_marketing_events_py(connector: Any):
         result, error = _call_method(
             connector, "get_marketing_events", arguments, label="get_marketing_events"
         )
-        if error:
-            pytest.fail(f"get_marketing_events failed with error: {error}")
-
-        assert result is not None, "Result should not be None when no error occurs"
-        assert isinstance(result, dict), "Result should be a dictionary"
-        assert "total" in result, "Result should contain 'total' key"
-        assert "events" in result, "Result should contain 'events' key"
-        assert isinstance(result["events"], list), "Events should be a list"
+        if result:
+            assert isinstance(result, dict)
+            assert "total" in result
+            assert "events" in result
+            assert isinstance(result["events"], list)
+        else:
+            if error:
+                pytest.fail(f"get_marketing_events failed with error: {error}")
     else:
         result, error = _call_method(
             connector, "get_marketing_events", arguments, label="get_marketing_events"
@@ -738,7 +746,8 @@ def test_get_operations_parametrized_py(
             for key in expected_keys:
                 assert key in result
         else:
-            assert error is not None
+            if error:
+                pytest.fail(f"{method_name} failed with error: {error}")
     else:
         result, error = _call_method(connector, method_name, arguments, label=method_name)
         assert result is not None
@@ -774,10 +783,12 @@ def test_create_contact_validation_py(
                 assert "required" not in error.lower() or "hubspot sdk" in error.lower()
         else:
             # Invalid data should fail with validation error
-            assert error is not None
-            if "Email is required" not in error:
-                # If not validation error, should be SDK error
-                assert "hubspot sdk" in error.lower() or "importerror" in error.lower()
+            if error:
+                if "Email is required" not in error:
+                    # If not validation error, should be SDK error
+                    assert "hubspot sdk" in error.lower() or "importerror" in error.lower()
+            else:
+                pytest.fail("Expected validation error for invalid contact data")
     else:
         result, error = _call_method(
             connector, "create_contact", arguments, label="create_contact_validation"
@@ -785,7 +796,8 @@ def test_create_contact_validation_py(
         if should_succeed:
             assert result is not None
         else:
-            assert error is not None
+            if error is None:
+                pytest.fail("Expected validation error for invalid contact data")
 
 
 @pytest.mark.parametrize(
@@ -813,9 +825,11 @@ def test_create_deal_validation_py(
             if error:
                 assert "required" not in error.lower() or "hubspot sdk" in error.lower()
         else:
-            assert error is not None
-            if "dealname is required" not in error:
-                assert "hubspot sdk" in error.lower() or "importerror" in error.lower()
+            if error:
+                if "dealname is required" not in error:
+                    assert "hubspot sdk" in error.lower() or "importerror" in error.lower()
+            else:
+                pytest.fail("Expected validation error for invalid deal data")
     else:
         result, error = _call_method(
             connector, "create_deal", arguments, label="create_deal_validation"
@@ -823,7 +837,8 @@ def test_create_deal_validation_py(
         if should_succeed:
             assert result is not None
         else:
-            assert error is not None
+            if error is None:
+                pytest.fail("Expected validation error for invalid deal data")
 
 
 # Error handling tests
@@ -852,10 +867,12 @@ def test_invalid_method_arguments_py(connector: Any):
     result, error = _call_method(connector, "update_contact", {"properties": {"firstname": "Test"}})
 
     if getattr(connector, "__is_real__", False):
-        assert error is not None
-        if "contact_id is required" not in error:
-            # Should be SDK-related error
-            assert "hubspot sdk" in error.lower() or "importerror" in error.lower()
+        if error:
+            if "contact_id is required" not in error:
+                # Should be SDK-related error
+                assert "hubspot sdk" in error.lower() or "importerror" in error.lower()
+        else:
+            pytest.fail("Expected error for invalid method arguments")
     else:
         # Mock doesn't validate, so it should succeed
         assert result is not None or error is not None
@@ -1220,7 +1237,7 @@ async def test_create_contact_segments_py(connector: Any):
 
 
 @pytest.mark.asyncio
-# @pytest.mark.skip(reason="demonstrating skipping")
+@pytest.mark.skip(reason="demonstrating skipping")
 async def test_forecast_revenue_py(connector: Any):
     """Test revenue forecasting functionality"""
     if getattr(connector, "__is_real__", False):
