@@ -736,7 +736,7 @@ class MCPHubspotConnector:
 
             contacts = []
             if response:
-                for contact in response:
+                for contact in response.results:
                     contact_data = {"id": contact.id, "properties": contact.properties}
                     contacts.append(contact_data)
 
@@ -785,7 +785,7 @@ class MCPHubspotConnector:
             response = client.crm.contacts.search_api.do_search(search_request)
 
             if response:
-                contact = response[0]
+                contact = response.results[0]
                 return {"id": contact.id, "properties": contact.properties}
             else:
                 return None
