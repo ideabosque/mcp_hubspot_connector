@@ -141,35 +141,21 @@ def handle_hubspot_errors(func):
 class MCPHubspotConnector:
     """Service layer using official HubSpot Python SDK with analytics capabilities"""
 
-    def __init__(
-        self,
-        logger: logging.Logger,
-        config: HubSpotSDKConfig = None,
-        **settings: Dict[str, Any],
-    ):
+    def __init__(self, logger: logging.Logger, **settings: Dict[str, Any]):
         self.logger = logger
+        self.setting = settings
+        access_token = settings.get("hubspot_access_token")
+        calls_per_second = settings.get("calls_per_second", 10)
 
-        # Handle configuration
-        if config:
-            self.config = config
-            access_token = config.access_token
-            calls_per_second = config.calls_per_second
-            self.setting = asdict(config)
-        else:
-            # Fallback to settings dict for backward compatibility
-            self.setting = settings
-            access_token = settings.get("hubspot_access_token")
-            calls_per_second = settings.get("calls_per_second", 10)
-
-            # Create config from settings
-            self.config = HubSpotSDKConfig(
-                access_token=access_token or "",
-                rate_limit_enabled=settings.get("rate_limit_enabled", True),
-                max_retries=settings.get("max_retries", 3),
-                timeout=settings.get("timeout", 30),
-                debug_mode=settings.get("debug_mode", False),
-                calls_per_second=calls_per_second,
-            )
+        # Create config from settings
+        self.config = HubSpotSDKConfig(
+            access_token=access_token or "",
+            rate_limit_enabled=settings.get("rate_limit_enabled", True),
+            max_retries=settings.get("max_retries", 3),
+            timeout=settings.get("timeout", 30),
+            debug_mode=settings.get("debug_mode", False),
+            calls_per_second=calls_per_second,
+        )
 
         # Initialize HubSpot client immediately
         if not HUBSPOT_AVAILABLE:
@@ -198,13 +184,13 @@ class MCPHubspotConnector:
 
     # * MCP Function.
     @handle_hubspot_errors
-    async def get_contact_analytics(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def get_contact_analytics(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: get_contact_analytics - Advanced contact analytics using SDK"""
         try:
-            date_range = params.get("date_range", {})
-            segmentation = params.get("segmentation", "all")
-            include_engagement = params.get("include_engagement", True)
-            limit = params.get("limit", 1000)
+            date_range = arguments.get("date_range", {})
+            segmentation = arguments.get("segmentation", "all")
+            include_engagement = arguments.get("include_engagement", True)
+            limit = arguments.get("limit", 1000)
 
             # Get contacts using SDK
             contacts_data = await self._get_contacts_with_sdk(limit, date_range)
@@ -894,14 +880,14 @@ class MCPHubspotConnector:
 
     # * MCP Function.
     @handle_hubspot_errors
-    async def analyze_campaign_performance(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def analyze_campaign_performance(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: analyze_campaign_performance - Campaign analytics using SDK"""
         try:
-            campaign_ids = params.get("campaign_ids", [])
-            metrics = params.get("metrics", ["open_rate", "click_rate", "conversion_rate"])
-            benchmark_type = params.get("benchmark_type", "historical")
-            include_recommendations = params.get("include_recommendations", True)
-            date_range = params.get("date_range", {})
+            campaign_ids = arguments.get("campaign_ids", [])
+            metrics = arguments.get("metrics", ["open_rate", "click_rate", "conversion_rate"])
+            benchmark_type = arguments.get("benchmark_type", "historical")
+            include_recommendations = arguments.get("include_recommendations", True)
+            date_range = arguments.get("date_range", {})
 
             # Get campaign data using SDK
             campaigns_data = await self._get_campaigns_with_sdk(campaign_ids)
@@ -1134,13 +1120,13 @@ class MCPHubspotConnector:
 
     # * MCP Function.
     @handle_hubspot_errors
-    async def analyze_sales_pipeline(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def analyze_sales_pipeline(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: analyze_sales_pipeline - Sales pipeline analytics using SDK"""
         try:
-            pipeline_ids = params.get("pipeline_ids", [])
-            timeframe = params.get("timeframe", {})
-            analysis_type = params.get("analysis_type", "conversion_rates")
-            include_recommendations = params.get("include_recommendations", True)
+            pipeline_ids = arguments.get("pipeline_ids", [])
+            timeframe = arguments.get("timeframe", {})
+            analysis_type = arguments.get("analysis_type", "conversion_rates")
+            include_recommendations = arguments.get("include_recommendations", True)
 
             # Get deals data using SDK
             deals_data = await self._get_deals_with_sdk(pipeline_ids, timeframe)
@@ -1327,13 +1313,13 @@ class MCPHubspotConnector:
 
     # * MCP Function.
     @handle_hubspot_errors
-    async def predict_lead_scores(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def predict_lead_scores(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: predict_lead_scores - ML-based lead scoring using SDK"""
         try:
-            contact_ids = params.get("contact_ids", [])
-            model_type = params.get("model_type", "conversion_probability")
-            include_feature_importance = params.get("include_feature_importance", True)
-            date_range = params.get("date_range", {})
+            contact_ids = arguments.get("contact_ids", [])
+            model_type = arguments.get("model_type", "conversion_probability")
+            include_feature_importance = arguments.get("include_feature_importance", True)
+            date_range = arguments.get("date_range", {})
 
             # Get contacts using SDK
             if contact_ids:
@@ -1443,14 +1429,15 @@ class MCPHubspotConnector:
 
     # ============ ADVANCED ANALYTICS FUNCTIONS ============
 
+    # * MCP Function.
     @handle_hubspot_errors
-    async def create_contact_segments(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def create_contact_segments(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: create_contact_segments - Advanced behavioral segmentation"""
         try:
-            segmentation_type = params.get("segmentation_type", "behavioral")
-            criteria = params.get("criteria", {})
-            num_segments = params.get("number_of_segments", 5)
-            limit = params.get("limit", 1000)  # Default limit to prevent performance issues
+            segmentation_type = arguments.get("segmentation_type", "behavioral")
+            criteria = arguments.get("criteria", {})
+            num_segments = arguments.get("number_of_segments", 5)
+            limit = arguments.get("limit", 1000)  # Default limit to prevent performance issues
 
             # Get contacts with enhanced criteria
             contacts_data = await self._get_contacts_with_advanced_criteria(criteria, limit)
@@ -1504,12 +1491,13 @@ class MCPHubspotConnector:
                 "error_message": f"Contact segmentation failed: {e}\n{log}",
             }
 
+    # * MCP Function.
     @handle_hubspot_errors
-    async def forecast_revenue(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def forecast_revenue(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: forecast_revenue - AI-powered revenue predictions"""
         try:
-            forecast_period = params.get("forecast_period", "90_days")
-            confidence_level = params.get("confidence_level", 0.95)
+            forecast_period = arguments.get("forecast_period", "90_days")
+            confidence_level = arguments.get("confidence_level", 0.95)
 
             # Get historical timeframe for training data
             historical_timeframe = self._get_historical_timeframe(forecast_period)
@@ -1560,13 +1548,14 @@ class MCPHubspotConnector:
                 "error_message": f"Revenue forecasting failed: {e}\n{log}",
             }
 
+    # * MCP Function.
     @handle_hubspot_errors
-    async def generate_executive_report(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def generate_executive_report(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: generate_executive_report - Comprehensive executive reporting"""
         try:
-            report_type = params.get("report_type", "monthly")
-            timeframe = params.get("timeframe", {})
-            include_forecast = params.get("include_forecast", True)
+            report_type = arguments.get("report_type", "monthly")
+            timeframe = arguments.get("timeframe", {})
+            include_forecast = arguments.get("include_forecast", True)
 
             # Gather data from multiple sources in parallel
             contacts_data = await self.get_contact_analytics({"date_range": timeframe})
@@ -1626,12 +1615,14 @@ class MCPHubspotConnector:
                 "error_message": f"Executive report generation failed: {e}\n{log}",
             }
 
-    async def batch_update_contacts(self, updates: List[Dict[str, Any]]) -> Dict[str, Any]:
+    # * MCP Function.
+    async def batch_update_contacts(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Batch update contacts with engagement scores or segments"""
         try:
             batch_size = 100
             successful_updates = 0
             failed_updates = 0
+            updates = arguments["updates"]
 
             for i in range(0, len(updates), batch_size):
                 batch = updates[i : i + batch_size]
