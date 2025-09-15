@@ -182,6 +182,169 @@ class MCPHubspotConnector:
         self.cache = {}
         self.cache_timestamps = {}
 
+    # Helper methods for common patterns
+    def _convert_date_range_to_timestamps(self, date_range: Dict[str, str]) -> tuple[str, str]:
+        """Convert ISO date strings to HubSpot timestamp format (milliseconds)"""
+        start_dt = pendulum.parse(date_range["start"])
+        end_dt = pendulum.parse(date_range["end"])
+        start_timestamp = str(int(start_dt.timestamp() * 1000))
+        end_timestamp = str(int(end_dt.timestamp() * 1000))
+        return start_timestamp, end_timestamp
+
+    async def _execute_with_rate_limit(self, api_call_func):
+        """Execute API call with rate limiting"""
+        await self.rate_limiter.wait_if_needed()
+        return api_call_func()
+
+    def _build_date_filter(
+        self, date_range: Dict[str, str], property_name: str = "createdate"
+    ) -> Dict[str, Any]:
+        """Build a date range filter for HubSpot API searches"""
+        try:
+            start_timestamp, end_timestamp = self._convert_date_range_to_timestamps(date_range)
+            return {
+                "propertyName": property_name,
+                "operator": "BETWEEN",
+                "value": start_timestamp,
+                "highValue": end_timestamp,
+            }
+        except Exception as e:
+            self.logger.warning(f"Date filter creation failed: {e}. Skipping date filter.")
+            return None
+
+    def _create_standard_error_response(
+        self, error_message: str, operation: str = "operation"
+    ) -> Dict[str, Any]:
+        """Create standardized error response structure"""
+        return {
+            "success": False,
+            "data": None,
+            "insights": [],
+            "recommendations": [],
+            "metadata": {},
+            "error_message": f"{operation} failed: {error_message}",
+        }
+
+    async def _paginated_api_fetch(
+        self,
+        api_client,
+        properties: List[str],
+        limit: int = 100,
+        max_limit: int = None,
+        transform_func=None,
+    ) -> List[Any]:
+        """Unified method for paginated API data retrieval with rate limiting and optional transformation"""
+        all_results = []
+        after = None
+        total_fetched = 0
+        max_items = max_limit or limit
+
+        while total_fetched < max_items:
+            # Calculate batch size
+            remaining = max_items - total_fetched
+            batch_limit = min(100, remaining)
+
+            # Rate limiting
+            await self.rate_limiter.wait_if_needed()
+
+            # API call
+            response = api_client.basic_api.get_page(
+                limit=batch_limit, after=after, properties=properties, archived=False
+            )
+
+            if response and response.results:
+                # Apply transformation if provided, otherwise use raw results
+                if transform_func:
+                    for item in response.results:
+                        if total_fetched >= max_items:
+                            break
+                        transformed_item = transform_func(item)
+                        all_results.append(transformed_item)
+                        total_fetched += 1
+                else:
+                    all_results.extend(response.results)
+                    total_fetched += len(response.results)
+
+                self.logger.info(f"Fetched {len(response.results)} items, total: {total_fetched}")
+
+            # Check for pagination
+            if (
+                hasattr(response, "paging")
+                and response.paging
+                and hasattr(response.paging, "next")
+                and response.paging.next
+                and total_fetched < max_items
+            ):
+                after = response.paging.next.after
+            else:
+                break
+
+        return all_results
+
+    async def _paginated_search_fetch(
+        self,
+        api_client,
+        filters: List[Dict],
+        properties: List[str],
+        limit: int = 100,
+        max_limit: int = None,
+        transform_func=None,
+    ) -> List[Any]:
+        """Unified method for paginated search API data retrieval with rate limiting and optional transformation"""
+        all_results = []
+        after = None
+        total_fetched = 0
+        max_items = max_limit or limit
+
+        while total_fetched < max_items:
+            # Calculate batch size
+            remaining = max_items - total_fetched
+            batch_limit = min(100, remaining)
+
+            # Create search request
+            search_request = PublicObjectSearchRequest(
+                filter_groups=[{"filters": filters}],
+                properties=properties,
+                limit=batch_limit,
+                after=after,
+            )
+
+            # Rate limiting
+            await self.rate_limiter.wait_if_needed()
+
+            # API call
+            search_response = api_client.search_api.do_search(search_request)
+
+            if search_response and search_response.results:
+                # Apply transformation if provided, otherwise use raw results
+                if transform_func:
+                    for item in search_response.results:
+                        if total_fetched >= max_items:
+                            break
+                        transformed_item = transform_func(item)
+                        all_results.append(transformed_item)
+                        total_fetched += 1
+                else:
+                    all_results.extend(search_response.results)
+                    total_fetched += len(search_response.results)
+
+                self.logger.info(
+                    f"Search fetched {len(search_response.results)} items, total: {total_fetched}"
+                )
+
+            # Check for pagination
+            if (
+                search_response
+                and search_response.paging
+                and search_response.paging.next
+                and total_fetched < max_items
+            ):
+                after = search_response.paging.next.after
+            else:
+                break
+
+        return all_results
+
     # * MCP Function.
     @handle_hubspot_errors
     async def get_contact_analytics(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -229,14 +392,7 @@ class MCPHubspotConnector:
             }
 
         except Exception as e:
-            return {
-                "success": False,
-                "data": None,
-                "insights": [],
-                "recommendations": [],
-                "metadata": {},
-                "error_message": f"Contact analytics failed: {str(e)}",
-            }
+            return self._create_standard_error_response(str(e), "Contact analytics")
 
     async def _get_contacts_with_sdk(
         self, limit: int, date_range: Dict[str, str] = None
@@ -264,15 +420,10 @@ class MCPHubspotConnector:
         all_contacts = []
 
         if date_range and date_range.get("start") and date_range.get("end"):
-            import pendulum
 
             try:
                 # Convert ISO strings to millisecond timestamps
-                start_dt = pendulum.parse(date_range["start"])
-                end_dt = pendulum.parse(date_range["end"])
-
-                start_timestamp = str(int(start_dt.timestamp() * 1000))
-                end_timestamp = str(int(end_dt.timestamp() * 1000))
+                start_timestamp, end_timestamp = self._convert_date_range_to_timestamps(date_range)
 
                 filters = [
                     {
@@ -289,32 +440,11 @@ class MCPHubspotConnector:
                 self.logger.warning(f"Date conversion failed: {e}. Skipping date filter.")
                 filters = []
 
-            search_request = PublicObjectSearchRequest(
-                filter_groups=[{"filters": filters}],
-                properties=properties,
-                limit=min(limit, 100),
-            )
-
+            # Use unified search method
             try:
-                after = None
-                total_fetched = 0
-
-                while total_fetched < limit:
-                    if after:
-                        search_request.after = after
-
-                    await self.rate_limiter.wait_if_needed()
-                    search_response = contacts_api.search_api.do_search(search_request)
-
-                    if search_response and search_response.results:
-                        all_contacts.extend(search_response.results)
-                        total_fetched += len(search_response.results)
-
-                    if search_response.paging and search_response.paging.next:
-                        after = search_response.paging.next.after
-                    else:
-                        break
-
+                all_contacts = await self._paginated_search_fetch(
+                    contacts_api, filters, properties, limit
+                )
             except Exception as e:
                 log = traceback.format_exc()
                 self.logger.error(f"Search contacts failed: {e}\n{log}")
@@ -433,38 +563,16 @@ class MCPHubspotConnector:
                 ["email", "firstname", "lastname", "createdate", "lifecyclestage"],
             )
 
-            # Use proper pagination with basic_api.get_page
-            contacts = []
-            after = None
-            total_fetched = 0
-            batch_limit = min(100, limit)
+            # Use unified paginated fetch with transformation
+            def transform_contact(contact):
+                return {"id": contact.id, "properties": contact.properties}
 
-            while total_fetched < limit:
-                response = client.crm.contacts.basic_api.get_page(
-                    limit=batch_limit, after=after, properties=properties, archived=False
+            # Run async method within sync context
+            contacts = asyncio.run(
+                self._paginated_api_fetch(
+                    client.crm.contacts, properties, limit, transform_func=transform_contact
                 )
-
-                if response and response.results:
-                    for contact in response.results:
-                        if total_fetched >= limit:
-                            break
-                        contact_data = {"id": contact.id, "properties": contact.properties}
-                        contacts.append(contact_data)
-                        total_fetched += 1
-
-                    # Check for next page
-                    if (
-                        hasattr(response, "paging")
-                        and response.paging
-                        and hasattr(response.paging, "next")
-                        and response.paging.next
-                        and total_fetched < limit
-                    ):
-                        after = response.paging.next.after
-                    else:
-                        break
-                else:
-                    break
+            )
 
             return {"total": len(contacts), "contacts": contacts}
 
@@ -556,38 +664,16 @@ class MCPHubspotConnector:
                 ["dealname", "amount", "dealstage", "createdate", "closedate"],
             )
 
-            # Use proper pagination with basic_api.get_page
-            deals = []
-            after = None
-            total_fetched = 0
-            batch_limit = min(100, limit)
+            # Use unified paginated fetch with transformation
+            def transform_deal(deal):
+                return {"id": deal.id, "properties": deal.properties}
 
-            while total_fetched < limit:
-                response = client.crm.deals.basic_api.get_page(
-                    limit=batch_limit, after=after, properties=properties, archived=False
+            # Run async method within sync context
+            deals = asyncio.run(
+                self._paginated_api_fetch(
+                    client.crm.deals, properties, limit, transform_func=transform_deal
                 )
-
-                if response and response.results:
-                    for deal in response.results:
-                        if total_fetched >= limit:
-                            break
-                        deal_data = {"id": deal.id, "properties": deal.properties}
-                        deals.append(deal_data)
-                        total_fetched += 1
-
-                    # Check for next page
-                    if (
-                        hasattr(response, "paging")
-                        and response.paging
-                        and hasattr(response.paging, "next")
-                        and response.paging.next
-                        and total_fetched < limit
-                    ):
-                        after = response.paging.next.after
-                    else:
-                        break
-                else:
-                    break
+            )
 
             return {"total": len(deals), "deals": deals}
 
@@ -645,37 +731,16 @@ class MCPHubspotConnector:
             )
 
             # Use proper pagination with basic_api.get_page
-            companies = []
-            after = None
-            total_fetched = 0
-            batch_limit = min(100, limit)
+            # Use unified paginated fetch with transformation
+            def transform_company(company):
+                return {"id": company.id, "properties": company.properties}
 
-            while total_fetched < limit:
-                response = client.crm.companies.basic_api.get_page(
-                    limit=batch_limit, after=after, properties=properties, archived=False
+            # Run async method within sync context
+            companies = asyncio.run(
+                self._paginated_api_fetch(
+                    client.crm.companies, properties, limit, transform_func=transform_company
                 )
-
-                if response and response.results:
-                    for company in response.results:
-                        if total_fetched >= limit:
-                            break
-                        company_data = {"id": company.id, "properties": company.properties}
-                        companies.append(company_data)
-                        total_fetched += 1
-
-                    # Check for next page
-                    if (
-                        hasattr(response, "paging")
-                        and response.paging
-                        and hasattr(response.paging, "next")
-                        and response.paging.next
-                        and total_fetched < limit
-                    ):
-                        after = response.paging.next.after
-                    else:
-                        break
-                else:
-                    break
+            )
 
             return {"total": len(companies), "companies": companies}
 
@@ -712,19 +777,19 @@ class MCPHubspotConnector:
 
             filters = [{"propertyName": "email", "operator": "CONTAINS_TOKEN", "value": query}]
 
-            search_request = PublicObjectSearchRequest(
-                filter_groups=[{"filters": filters}],
-                properties=properties,
-                limit=min(limit, 100),
+            # Use unified search with transformation
+            def transform_contact(contact):
+                return {"id": contact.id, "properties": contact.properties}
+
+            contacts = asyncio.run(
+                self._paginated_search_fetch(
+                    client.crm.contacts,
+                    filters,
+                    properties,
+                    limit,
+                    transform_func=transform_contact,
+                )
             )
-
-            response = client.crm.contacts.search_api.do_search(search_request)
-
-            contacts = []
-            if response:
-                for contact in response.results:
-                    contact_data = {"id": contact.id, "properties": contact.properties}
-                    contacts.append(contact_data)
 
             return {"total": len(contacts), "contacts": contacts, "query": query}
 
@@ -764,14 +829,13 @@ class MCPHubspotConnector:
 
             filters = [{"propertyName": "email", "operator": "EQ", "value": email}]
 
-            search_request = PublicObjectSearchRequest(
-                filter_groups=[{"filters": filters}], properties=properties, limit=1
+            # Use unified search for single result
+            results = asyncio.run(
+                self._paginated_search_fetch(client.crm.contacts, filters, properties, limit=1)
             )
 
-            response = client.crm.contacts.search_api.do_search(search_request)
-
-            if response:
-                contact = response.results[0]
+            if results:
+                contact = results[0]
                 return {"id": contact.id, "properties": contact.properties}
             else:
                 return None
@@ -992,14 +1056,7 @@ class MCPHubspotConnector:
 
         except Exception as e:
             log = traceback.format_exc()
-            return {
-                "success": False,
-                "data": None,
-                "insights": [],
-                "recommendations": [],
-                "metadata": {},
-                "error_message": f"Campaign analysis failed: {str(e)}\n{log}",
-            }
+            return self._create_standard_error_response(f"{str(e)}\n{log}", "Campaign analysis")
 
     def _format_datetime(self, dt_value):
         """Format datetime values to ISO format strings with proper error handling"""
@@ -1235,15 +1292,12 @@ class MCPHubspotConnector:
 
             # Add date range filter - convert ISO dates to millisecond timestamps
             if timeframe and timeframe.get("start") and timeframe.get("end"):
-                import pendulum
 
                 try:
                     # Convert ISO strings to millisecond timestamps
-                    start_dt = pendulum.parse(timeframe["start"])
-                    end_dt = pendulum.parse(timeframe["end"])
-
-                    start_timestamp = str(int(start_dt.timestamp() * 1000))
-                    end_timestamp = str(int(end_dt.timestamp() * 1000))
+                    start_timestamp, end_timestamp = self._convert_date_range_to_timestamps(
+                        timeframe
+                    )
 
                     filters.append(
                         {
@@ -1260,66 +1314,18 @@ class MCPHubspotConnector:
                     self.logger.warning(f"Date conversion failed: {e}. Skipping date filter.")
                     # Continue without date filter rather than failing
 
-            # Create search request with proper filter groups structure
-            search_request = PublicObjectSearchRequest(
-                filter_groups=[{"filters": filters}], properties=properties, limit=100
-            )
-
-            # Paginate through search results with error handling and 10k limit protection
-            after = None
-            max_deals = 9900  # Stay under the 10,000 limit
+            # Use unified search with 10k limit protection
             try:
-                while len(all_deals) < max_deals:
-                    if after:
-                        search_request.after = after
-
-                    # Adjust batch size to not exceed the max limit
-                    remaining = max_deals - len(all_deals)
-                    search_request.limit = min(100, remaining)
-
-                    await self.rate_limiter.wait_if_needed()
-                    search_response = deals_api.search_api.do_search(search_request)
-
-                    if search_response and search_response.results:
-                        all_deals.extend(search_response.results)
-                        self.logger.info(
-                            f"Retrieved {len(search_response.results)} deals, total: {len(all_deals)}"
-                        )
-
-                    if (
-                        search_response.paging
-                        and search_response.paging.next
-                        and len(all_deals) < max_deals
-                    ):
-                        after = search_response.paging.next.after
-                    else:
-                        break
-
+                all_deals = await self._paginated_search_fetch(
+                    deals_api, filters, properties, max_limit=9900
+                )
             except Exception as e:
                 self.logger.error(f"Search API failed with filters: {e}")
                 raise
 
         else:
-            # Get all deals without filters using basic_api.get_page
-            after = None
-            while True:
-                await self.rate_limiter.wait_if_needed()
-                response = deals_api.basic_api.get_page(
-                    limit=100, after=after, properties=properties, archived=False
-                )
-
-                if response and response.results:
-                    all_deals.extend(response.results)
-
-                if (
-                    hasattr(response, "paging")
-                    and response.paging
-                    and hasattr(response.paging, "next")
-                    and response.paging.next
-                ):
-                    after = response.paging.next.after
-                else:
-                    break
+            # Get all deals without filters using unified paginated fetch
+            all_deals = await self._paginated_api_fetch(deals_api, properties, max_limit=9900)
 
         self.logger.info(f"Fetched {len(all_deals)} deals using HubSpot SDK")
         return all_deals
@@ -1607,9 +1613,21 @@ class MCPHubspotConnector:
                         else None
                     ),
                     "departmental_breakdown": {
-                        "sales": pipeline_data.get("data", {}) if pipeline_data and pipeline_data.get("success") else {},
-                        "marketing": campaigns_data.get("data", {}) if campaigns_data and campaigns_data.get("success") else {},
-                        "customer_success": contacts_data.get("data", {}) if contacts_data and contacts_data.get("success") else {}
+                        "sales": (
+                            pipeline_data.get("data", {})
+                            if pipeline_data and pipeline_data.get("success")
+                            else {}
+                        ),
+                        "marketing": (
+                            campaigns_data.get("data", {})
+                            if campaigns_data and campaigns_data.get("success")
+                            else {}
+                        ),
+                        "customer_success": (
+                            contacts_data.get("data", {})
+                            if contacts_data and contacts_data.get("success")
+                            else {}
+                        ),
                     },
                 },
                 "insights": executive_insights["insights"],
@@ -1697,15 +1715,12 @@ class MCPHubspotConnector:
 
         # Date range filters - convert ISO to timestamps
         if "date_range" in criteria:
-            import pendulum
 
             try:
                 # Convert ISO strings to millisecond timestamps
-                start_dt = pendulum.parse(criteria["date_range"]["start"])
-                end_dt = pendulum.parse(criteria["date_range"]["end"])
-
-                start_timestamp = str(int(start_dt.timestamp() * 1000))
-                end_timestamp = str(int(end_dt.timestamp() * 1000))
+                start_timestamp, end_timestamp = self._convert_date_range_to_timestamps(
+                    criteria["date_range"]
+                )
 
                 filters.append(
                     {
@@ -1786,15 +1801,12 @@ class MCPHubspotConnector:
 
             # Try with just date range if it exists
             if "date_range" in criteria:
-                import pendulum
 
                 try:
                     # Convert ISO strings to millisecond timestamps
-                    start_dt = pendulum.parse(criteria["date_range"]["start"])
-                    end_dt = pendulum.parse(criteria["date_range"]["end"])
-
-                    start_timestamp = str(int(start_dt.timestamp() * 1000))
-                    end_timestamp = str(int(end_dt.timestamp() * 1000))
+                    start_timestamp, end_timestamp = self._convert_date_range_to_timestamps(
+                        criteria["date_range"]
+                    )
 
                     fallback_filters.append(
                         {
