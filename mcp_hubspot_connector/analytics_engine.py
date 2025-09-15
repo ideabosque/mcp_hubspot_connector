@@ -15,16 +15,18 @@ This module provides advanced analytics capabilities including:
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Optional, Union
-
-import numpy as np
-import pandas as pd
-import pendulum
 
 # Set environment variables BEFORE sklearn imports to prevent atexit issues
 os.environ["JOBLIB_MULTIPROCESSING"] = "0"
 os.environ["SKLEARN_ENABLE_MULTIPROCESSING"] = "0"
 
+from collections import defaultdict
+from typing import Any, Dict, List, Optional, Union
+
+import numpy as np
+import pandas as pd
+import pendulum
+from prophet import Prophet
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
@@ -1177,7 +1179,6 @@ class AnalyticsEngine:
                         performance_scores.append(score / weight_sum)
 
                 if performance_scores:
-                    import numpy as np
 
                     engagement_analysis["performance_distribution"] = {
                         "best_performance": float(max(performance_scores)),
@@ -2116,7 +2117,6 @@ class AnalyticsEngine:
             thresholds = []
             segment_labels = ["All Contacts"]
         else:
-            import numpy as np
 
             percentiles = [i * 100 / num_segments for i in range(1, num_segments)]
             thresholds = [np.percentile(all_scores, p) for p in percentiles]
@@ -2270,8 +2270,6 @@ class AnalyticsEngine:
 
     async def _rfm_segmentation(self, contacts_data, engagement_data, num_segments):
         """RFM (Recency, Frequency, Monetary) segmentation"""
-        import numpy as np
-        import pendulum
 
         # Calculate RFM scores for each contact
         rfm_scores = {}
@@ -2466,7 +2464,6 @@ class AnalyticsEngine:
 
     async def _value_based_segmentation(self, contacts_data, num_segments):
         """Value-based segmentation based on customer lifetime value and revenue potential"""
-        import numpy as np
 
         # Calculate value scores for each contact
         value_scores = {}
@@ -2711,7 +2708,6 @@ class AnalyticsEngine:
             }
 
         # Extract deal dates and amounts
-        import pendulum
 
         deal_dates = []
 
@@ -2802,12 +2798,6 @@ class AnalyticsEngine:
         self, historical_deals: List[Any], confidence_level: float, data_quality: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Advanced forecasting using Facebook Prophet"""
-
-        try:
-            import pandas as pd
-            from prophet import Prophet
-        except ImportError:
-            raise ImportError("Prophet not available - install with: pip install prophet")
 
         # Prepare time series data
         ts_data = self._prepare_prophet_timeseries(historical_deals)
@@ -2904,9 +2894,6 @@ class AnalyticsEngine:
 
     def _prepare_prophet_timeseries(self, historical_deals: List[Any]) -> List[Dict[str, Any]]:
         """Convert historical deals to Prophet-compatible time series"""
-        from collections import defaultdict
-
-        import pendulum
 
         # Group deals by date and sum revenue
         daily_revenue = defaultdict(float)
