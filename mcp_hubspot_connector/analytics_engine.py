@@ -23,15 +23,15 @@ import pendulum
 os.environ["JOBLIB_MULTIPROCESSING"] = "0"
 os.environ["SKLEARN_ENABLE_MULTIPROCESSING"] = "0"
 
+# Import pandas and numpy
 try:
     import numpy as np
     import pandas as pd
-
     PANDAS_AVAILABLE = True
 except ImportError:
     PANDAS_AVAILABLE = False
 
-# Early sklearn import to avoid shutdown timing issues
+# Import sklearn modules early to avoid shutdown timing issues
 try:
     from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
     from sklearn.linear_model import LogisticRegression
@@ -50,25 +50,9 @@ try:
     }
     SKLEARN_AVAILABLE = True
 except Exception as e:
-    print(f"Early sklearn import failed: {e}")
+    print(f"Sklearn import failed: {e}")
     SKLEARN_MODULES = {}
     SKLEARN_AVAILABLE = False
-
-# Legacy variables for backward compatibility
-_sklearn_modules = SKLEARN_MODULES
-
-
-def _get_sklearn_modules():
-    """Return pre-imported sklearn modules or raise error if not available"""
-    global SKLEARN_AVAILABLE, SKLEARN_MODULES
-
-    if SKLEARN_AVAILABLE:
-        return SKLEARN_MODULES
-    else:
-        raise RuntimeError(
-            "Sklearn modules are not available. This may be due to import issues during module loading. "
-            "Check that sklearn is properly installed and that the module is being imported in a clean state."
-        )
 
 
 # Create minimal fallbacks for pandas if not available
@@ -1738,19 +1722,18 @@ class AnalyticsEngine:
     ) -> Dict[str, Any]:
         """Enhanced ML-based lead scoring with comprehensive feature engineering"""
 
-        sklearn_modules = _get_sklearn_modules()
-        if not sklearn_modules:
+        if not SKLEARN_AVAILABLE:
             # Fallback to simple scoring if sklearn not available
             return await self._simple_lead_scoring(contacts_data)
 
-        # Extract sklearn classes for use
-        GradientBoostingClassifier = sklearn_modules["GradientBoostingClassifier"]
-        RandomForestClassifier = sklearn_modules["RandomForestClassifier"]
-        LogisticRegression = sklearn_modules["LogisticRegression"]
-        classification_report = sklearn_modules["classification_report"]
-        cross_val_score = sklearn_modules["cross_val_score"]
-        train_test_split = sklearn_modules["train_test_split"]
-        StandardScaler = sklearn_modules["StandardScaler"]
+        # Use directly imported sklearn classes
+        GradientBoostingClassifier = SKLEARN_MODULES["GradientBoostingClassifier"]
+        RandomForestClassifier = SKLEARN_MODULES["RandomForestClassifier"]
+        LogisticRegression = SKLEARN_MODULES["LogisticRegression"]
+        classification_report = SKLEARN_MODULES["classification_report"]
+        cross_val_score = SKLEARN_MODULES["cross_val_score"]
+        train_test_split = SKLEARN_MODULES["train_test_split"]
+        StandardScaler = SKLEARN_MODULES["StandardScaler"]
 
         if not contacts_data:
             return {
