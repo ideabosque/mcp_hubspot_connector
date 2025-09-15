@@ -1572,15 +1572,15 @@ class MCPHubspotConnector:
             include_forecast = arguments.get("include_forecast", True)
 
             # Gather data from multiple sources in parallel
-            contacts_data = await self.get_contact_analytics({"date_range": timeframe})
-            campaigns_data = await self.analyze_campaign_performance({"date_range": timeframe})
-            pipeline_data = await self.analyze_sales_pipeline({"timeframe": timeframe})
+            contacts_data = await self.get_contact_analytics(date_range=timeframe)
+            campaigns_data = await self.analyze_campaign_performance(date_range=timeframe)
+            pipeline_data = await self.analyze_sales_pipeline(timeframe=timeframe)
 
             # Include revenue forecast if requested
             forecast_data = None
             if include_forecast:
                 forecast_data = await self.forecast_revenue(
-                    {"forecast_period": "90_days", "confidence_level": 0.95}
+                    forecast_period="90_days", confidence_level=0.95
                 )
 
             # Generate executive insights
@@ -1596,18 +1596,24 @@ class MCPHubspotConnector:
             return {
                 "success": True,
                 "data": {
-                    "executiveSummary": executive_insights["summary"],
-                    "keyMetrics": executive_insights["kpis"],
-                    "trends": executive_insights["trends"],
-                    "performance": executive_insights["performance_analysis"],
+                    "report_id": f"exec_report_{int(time.time())}",
+                    "executive_summary": executive_insights["summary"],
+                    "key_metrics": executive_insights["key_metrics"],
+                    "trends": executive_insights["insights"],
+                    "performance": executive_insights["recommendations"],
                     "forecast": (
                         forecast_data["data"]
                         if forecast_data and forecast_data["success"]
                         else None
                     ),
+                    "departmental_breakdown": {
+                        "sales": pipeline_data.get("data", {}) if pipeline_data and pipeline_data.get("success") else {},
+                        "marketing": campaigns_data.get("data", {}) if campaigns_data and campaigns_data.get("success") else {},
+                        "customer_success": contacts_data.get("data", {}) if contacts_data and contacts_data.get("success") else {}
+                    },
                 },
-                "insights": executive_insights["strategic_insights"],
-                "recommendations": executive_insights["strategic_actions"],
+                "insights": executive_insights["insights"],
+                "recommendations": executive_insights["recommendations"],
                 "metadata": {
                     "report_type": report_type,
                     "timeframe": timeframe,

@@ -443,3 +443,84 @@ class InsightGenerator:
             )
 
         return {"insights": insights, "recommendations": recommendations}
+
+    async def generate_executive_insights(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate comprehensive executive insights from multiple data sources"""
+
+        contacts_data = data.get("contacts", {})
+        campaigns_data = data.get("campaigns", {})
+        pipeline_data = data.get("pipeline", {})
+        forecast_data = data.get("forecast", {})
+
+        summary = []
+        key_metrics = {}
+        insights = []
+        recommendations = []
+
+        # Process contacts data
+        if contacts_data and contacts_data.get("success"):
+            contact_metrics = contacts_data.get("data", {})
+            total_contacts = contact_metrics.get("total_contacts", 0)
+            new_contacts = contact_metrics.get("new_contacts", 0)
+            key_metrics["total_contacts"] = total_contacts
+            key_metrics["new_contacts"] = new_contacts
+
+            if new_contacts > 0:
+                summary.append(f"Generated {new_contacts} new contacts")
+
+        # Process campaigns data
+        if campaigns_data and campaigns_data.get("success"):
+            campaign_metrics = campaigns_data.get("data", {})
+            total_campaigns = len(campaign_metrics.get("campaigns", []))
+            key_metrics["active_campaigns"] = total_campaigns
+
+            if total_campaigns > 0:
+                summary.append(f"Running {total_campaigns} active campaigns")
+
+        # Process pipeline data
+        if pipeline_data and pipeline_data.get("success"):
+            pipeline_metrics = pipeline_data.get("data", {})
+            total_pipeline_value = pipeline_metrics.get("total_pipeline_value", 0)
+            total_deals = pipeline_metrics.get("total_deals", 0)
+            key_metrics["pipeline_value"] = total_pipeline_value
+            key_metrics["pipeline_deals"] = total_deals
+
+            if total_pipeline_value > 0:
+                summary.append(f"Pipeline value: ${total_pipeline_value:,.0f}")
+
+        # Process forecast data
+        if forecast_data and forecast_data.get("success"):
+            forecast_metrics = forecast_data.get("data", {})
+            forecast_value = forecast_metrics.get("forecast", 0)
+            key_metrics["revenue_forecast"] = forecast_value
+
+            if forecast_value > 0:
+                summary.append(f"Revenue forecast: ${forecast_value:,.0f}")
+
+        # Generate insights based on combined data
+        if key_metrics.get("pipeline_value", 0) > 0 and key_metrics.get("revenue_forecast", 0) > 0:
+            conversion_rate = key_metrics["revenue_forecast"] / key_metrics["pipeline_value"] * 100
+            insights.append(f"Pipeline conversion rate: {conversion_rate:.1f}%")
+
+            if conversion_rate < 20:
+                recommendations.append("Low pipeline conversion - review deal qualification process")
+            elif conversion_rate > 50:
+                insights.append("Strong pipeline conversion rate")
+
+        if key_metrics.get("new_contacts", 0) > 0 and key_metrics.get("pipeline_deals", 0) > 0:
+            contact_to_deal_ratio = key_metrics["new_contacts"] / key_metrics["pipeline_deals"]
+            if contact_to_deal_ratio < 5:
+                recommendations.append("High contact-to-deal conversion - optimize lead nurturing")
+            elif contact_to_deal_ratio > 20:
+                recommendations.append("Low contact-to-deal conversion - improve lead qualification")
+
+        # Default summary if none generated
+        if not summary:
+            summary.append("Executive report generated successfully")
+
+        return {
+            "summary": ". ".join(summary),
+            "key_metrics": key_metrics,
+            "insights": insights,
+            "recommendations": recommendations
+        }
