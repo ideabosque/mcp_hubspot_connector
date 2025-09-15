@@ -1184,7 +1184,10 @@ class MCPHubspotConnector:
             }
 
     async def _get_deals_with_sdk(
-        self, pipeline_ids: List[str] = None, timeframe: Dict[str, str] = None
+        self,
+        pipeline_ids: List[str] = None,
+        timeframe: Dict[str, str] = None,
+        open_only: bool = False,
     ) -> List[Any]:
         """Get deals data using HubSpot SDK"""
 
@@ -1209,8 +1212,18 @@ class MCPHubspotConnector:
         all_deals = []
 
         # Build search request if filtering is needed
-        if pipeline_ids or timeframe:
+        if pipeline_ids or timeframe or open_only:
             filters = []
+
+            # Add open deals filter
+            if open_only:
+                filters.append(
+                    {
+                        "propertyName": "dealstage",
+                        "operator": "NOT_IN",
+                        "values": ["closedwon", "closedlost", "closed-won", "closed-lost"],
+                    }
+                )
 
             # Add pipeline filter - convert to strings
             if pipeline_ids:
@@ -1505,7 +1518,7 @@ class MCPHubspotConnector:
 
             # Get historical and current pipeline data
             historical_deals = await self._get_deals_with_sdk(timeframe=historical_timeframe)
-            current_pipeline = await self._get_deals_with_sdk()
+            current_pipeline = await self._get_deals_with_sdk(open_only=True)
 
             # Revenue forecasting through analytics engine
             forecast_result = await self.analytics_engine.forecast_revenue(
