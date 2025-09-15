@@ -17,89 +17,19 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional, Union
 
+import numpy as np
+import pandas as pd
 import pendulum
 
-# Set environment variables BEFORE any sklearn imports to prevent atexit issues
+# Set environment variables BEFORE sklearn imports to prevent atexit issues
 os.environ["JOBLIB_MULTIPROCESSING"] = "0"
 os.environ["SKLEARN_ENABLE_MULTIPROCESSING"] = "0"
 
-# Import pandas and numpy
-try:
-    import numpy as np
-    import pandas as pd
-    PANDAS_AVAILABLE = True
-except ImportError:
-    PANDAS_AVAILABLE = False
-
-# Import sklearn modules early to avoid shutdown timing issues
-try:
-    from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.metrics import classification_report
-    from sklearn.model_selection import cross_val_score, train_test_split
-    from sklearn.preprocessing import StandardScaler
-
-    SKLEARN_MODULES = {
-        "GradientBoostingClassifier": GradientBoostingClassifier,
-        "RandomForestClassifier": RandomForestClassifier,
-        "LogisticRegression": LogisticRegression,
-        "classification_report": classification_report,
-        "cross_val_score": cross_val_score,
-        "train_test_split": train_test_split,
-        "StandardScaler": StandardScaler,
-    }
-    SKLEARN_AVAILABLE = True
-except Exception as e:
-    print(f"Sklearn import failed: {e}")
-    SKLEARN_MODULES = {}
-    SKLEARN_AVAILABLE = False
-
-
-# Create minimal fallbacks for pandas if not available
-if not PANDAS_AVAILABLE:
-
-    class pd:
-        @staticmethod
-        def DataFrame(data):
-            return data if isinstance(data, list) else []
-
-        @staticmethod
-        def to_datetime(data, errors="coerce"):
-            try:
-                if isinstance(data, str):
-                    return pendulum.parse(data)
-                return data
-            except:
-                return None
-
-        @staticmethod
-        def Timestamp():
-            class MockTimestamp:
-                @staticmethod
-                def now():
-                    return pendulum.now()
-
-            return MockTimestamp()
-
-        @staticmethod
-        def isna(data):
-            return data is None
-
-    class np:
-        @staticmethod
-        def array(data):
-            return data
-
-        @staticmethod
-        def mean(data):
-            return sum(data) / len(data) if data else 0
-
-        @staticmethod
-        def var(data):
-            if not data:
-                return 0
-            mean_val = sum(data) / len(data)
-            return sum((x - mean_val) ** 2 for x in data) / len(data)
+from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report
+from sklearn.model_selection import cross_val_score, train_test_split
+from sklearn.preprocessing import StandardScaler
 
 
 class AnalyticsEngine:
@@ -107,7 +37,7 @@ class AnalyticsEngine:
 
     def __init__(self):
         """Initialize the analytics engine"""
-        self.pandas_available = PANDAS_AVAILABLE
+        pass
 
     async def process_contact_metrics(
         self, contacts_data: List[Any], engagement_data: List[Dict], segmentation: str
@@ -1722,18 +1652,7 @@ class AnalyticsEngine:
     ) -> Dict[str, Any]:
         """Enhanced ML-based lead scoring with comprehensive feature engineering"""
 
-        if not SKLEARN_AVAILABLE:
-            # Fallback to simple scoring if sklearn not available
-            return await self._simple_lead_scoring(contacts_data)
-
-        # Use directly imported sklearn classes
-        GradientBoostingClassifier = SKLEARN_MODULES["GradientBoostingClassifier"]
-        RandomForestClassifier = SKLEARN_MODULES["RandomForestClassifier"]
-        LogisticRegression = SKLEARN_MODULES["LogisticRegression"]
-        classification_report = SKLEARN_MODULES["classification_report"]
-        cross_val_score = SKLEARN_MODULES["cross_val_score"]
-        train_test_split = SKLEARN_MODULES["train_test_split"]
-        StandardScaler = SKLEARN_MODULES["StandardScaler"]
+        # sklearn classes are directly imported
 
         if not contacts_data:
             return {
