@@ -12,95 +12,24 @@ from dataclasses import asdict, dataclass
 from functools import wraps
 from typing import Any, Dict, List, Optional, Union
 
+import numpy as np
+import pandas as pd
 import pendulum
+
+# Import the official HubSpot SDK
+from hubspot import HubSpot
+from hubspot.crm.contacts import ApiException as ContactsApiException
+from hubspot.crm.contacts import SimplePublicObjectInput
+from hubspot.crm.contacts.models.filter import Filter
+from hubspot.crm.contacts.models.filter_group import FilterGroup
+from hubspot.crm.contacts.models.public_object_search_request import PublicObjectSearchRequest
+from hubspot.crm.deals import ApiException as DealsApiException
+from hubspot.crm.deals import SimplePublicObjectInput as DealsInput
+from hubspot.marketing.events import ApiException as MarketingApiException
 
 from .analytics_engine import AnalyticsEngine
 from .insight_generator import InsightGenerator
 from .rate_limiter import RateLimiter
-
-try:
-    import numpy as np
-    import pandas as pd
-except ImportError:
-    print("Warning: numpy and pandas not available. Some analytics features may be limited.")
-
-    # Create minimal fallbacks
-    class pd:
-        @staticmethod
-        def DataFrame(data):
-            return data if isinstance(data, list) else []
-
-    class np:
-        @staticmethod
-        def array(data):
-            return data
-
-
-# Try to import the official HubSpot SDK
-try:
-    from hubspot import HubSpot
-    from hubspot.crm.contacts import ApiException as ContactsApiException
-    from hubspot.crm.contacts import SimplePublicObjectInput
-    from hubspot.crm.contacts.models.filter import Filter
-    from hubspot.crm.contacts.models.filter_group import FilterGroup
-    from hubspot.crm.contacts.models.public_object_search_request import PublicObjectSearchRequest
-    from hubspot.crm.deals import ApiException as DealsApiException
-    from hubspot.marketing.events import ApiException as MarketingApiException
-
-    HUBSPOT_AVAILABLE = True
-except ImportError:
-    # Fallback if HubSpot SDK is not properly installed
-    HUBSPOT_AVAILABLE = False
-
-    # Create mock classes for development/testing
-    class HubSpot:
-        def __init__(self, access_token=None):
-            self.access_token = access_token
-
-    class ContactsApiException(Exception):
-        def __init__(self, reason="API Error"):
-            self.reason = reason
-            super().__init__(self.reason)
-
-    class DealsApiException(Exception):
-        def __init__(self, reason="API Error"):
-            self.reason = reason
-            super().__init__(self.reason)
-
-    class MarketingApiException(Exception):
-        def __init__(self, reason="API Error"):
-            self.reason = reason
-            super().__init__(self.reason)
-
-    class SimplePublicObjectInput:
-        def __init__(self, properties=None):
-            self.properties = properties or {}
-
-    class Filter:
-        def __init__(
-            self,
-            property_name=None,
-            operator=None,
-            value=None,
-            high_value=None,
-            values=None,
-        ):
-            self.property_name = property_name
-            self.operator = operator
-            self.value = value
-            self.high_value = high_value
-            self.values = values
-
-    class FilterGroup:
-        def __init__(self, filters=None):
-            self.filters = filters or []
-
-    class PublicObjectSearchRequest:
-        def __init__(self, filter_groups=None, properties=None, limit=None, after=None):
-            self.filter_groups = filter_groups or []
-            self.properties = properties or []
-            self.limit = limit
-            self.after = after
 
 
 @dataclass
@@ -158,14 +87,6 @@ class MCPHubspotConnector:
         )
 
         # Initialize HubSpot client immediately
-        if not HUBSPOT_AVAILABLE:
-            raise ImportError(
-                "HubSpot SDK not available. Please install the official HubSpot SDK:\n"
-                "pip install hubspot-api-client\n"
-                "or\n"
-                "pip install simplejson  # if using the legacy hubspot package"
-            )
-
         if not access_token:
             raise ValueError("hubspot_access_token is required in settings or config")
 
@@ -295,6 +216,8 @@ class MCPHubspotConnector:
         after = None
         total_fetched = 0
         max_items = max_limit or limit
+
+        # Use globally imported PublicObjectSearchRequest (real SDK or mock)
 
         while total_fetched < max_items:
             # Calculate batch size
@@ -597,12 +520,7 @@ class MCPHubspotConnector:
             if not properties.get("email"):
                 raise ValueError("Email is required to create a contact")
 
-            if HUBSPOT_AVAILABLE:
-                from hubspot.crm.contacts import SimplePublicObjectInput
-
-                contact_input = SimplePublicObjectInput(properties=properties)
-            else:
-                raise ImportError("HubSpot SDK not available")
+            contact_input = SimplePublicObjectInput(properties=properties)
             response = client.crm.contacts.create(simple_public_object_input=contact_input)
 
             return {"id": response.id, "properties": response.properties}
@@ -629,12 +547,7 @@ class MCPHubspotConnector:
             if not contact_id:
                 raise ValueError("contact_id is required to update a contact")
 
-            if HUBSPOT_AVAILABLE:
-                from hubspot.crm.contacts import SimplePublicObjectInput
-
-                contact_input = SimplePublicObjectInput(properties=properties)
-            else:
-                raise ImportError("HubSpot SDK not available")
+            contact_input = SimplePublicObjectInput(properties=properties)
 
             response = client.crm.contacts.update(
                 contact_id=contact_id, simple_public_object_input=contact_input
@@ -698,12 +611,7 @@ class MCPHubspotConnector:
             if not properties.get("dealname"):
                 raise ValueError("dealname is required to create a deal")
 
-            if HUBSPOT_AVAILABLE:
-                from hubspot.crm.deals import SimplePublicObjectInput
-
-                deal_input = SimplePublicObjectInput(properties=properties)
-            else:
-                raise ImportError("HubSpot SDK not available")
+            deal_input = DealsInput(properties=properties)
             response = client.crm.deals.create(simple_public_object_input=deal_input)
 
             return {"id": response.id, "properties": response.properties}
@@ -766,14 +674,7 @@ class MCPHubspotConnector:
             if not query:
                 return self.get_contacts(limit=limit, properties=properties)
 
-            if HUBSPOT_AVAILABLE:
-                from hubspot.crm.contacts.models.filter import Filter
-                from hubspot.crm.contacts.models.filter_group import FilterGroup
-                from hubspot.crm.contacts.models.public_object_search_request import (
-                    PublicObjectSearchRequest,
-                )
-            else:
-                raise ImportError("HubSpot SDK not available")
+            # SDK classes are already globally imported
 
             filters = [{"propertyName": "email", "operator": "CONTAINS_TOKEN", "value": query}]
 
@@ -818,14 +719,7 @@ class MCPHubspotConnector:
                 ["email", "firstname", "lastname", "createdate", "lifecyclestage"],
             )
 
-            if HUBSPOT_AVAILABLE:
-                from hubspot.crm.contacts.models.filter import Filter
-                from hubspot.crm.contacts.models.filter_group import FilterGroup
-                from hubspot.crm.contacts.models.public_object_search_request import (
-                    PublicObjectSearchRequest,
-                )
-            else:
-                raise ImportError("HubSpot SDK not available")
+            # SDK classes are already globally imported
 
             filters = [{"propertyName": "email", "operator": "EQ", "value": email}]
 
