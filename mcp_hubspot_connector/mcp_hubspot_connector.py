@@ -1316,6 +1316,7 @@ class MCPHubspotConnector:
     async def predict_lead_scores(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
         """MCP Tool: predict_lead_scores - ML-based lead scoring using SDK"""
         try:
+            limit = arguments.get("limit", 100)
             contact_ids = arguments.get("contact_ids", [])
             model_type = arguments.get("model_type", "conversion_probability")
             include_feature_importance = arguments.get("include_feature_importance", True)
@@ -1325,7 +1326,7 @@ class MCPHubspotConnector:
             if contact_ids:
                 contacts_data = await self._get_contacts_by_ids_with_sdk(contact_ids)
             else:
-                contacts_data = await self._get_contacts_with_sdk(limit=1000)
+                contacts_data = await self._get_contacts_with_sdk(limit=limit)
 
             # Get historical deals for training with date filtering if specified
             if date_range and date_range.get("start") and date_range.get("end"):
