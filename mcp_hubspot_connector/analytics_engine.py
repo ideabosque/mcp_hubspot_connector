@@ -14,9 +14,14 @@ This module provides advanced analytics capabilities including:
 
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, List, Optional, Union
 
 import pendulum
+
+# Set environment variables BEFORE any sklearn imports to prevent atexit issues
+os.environ["JOBLIB_MULTIPROCESSING"] = "0"
+os.environ["SKLEARN_ENABLE_MULTIPROCESSING"] = "0"
 
 try:
     import numpy as np
@@ -26,58 +31,44 @@ try:
 except ImportError:
     PANDAS_AVAILABLE = False
 
-# Lazy sklearn imports - only import when needed
-SKLEARN_AVAILABLE = None
-_sklearn_modules = {}
+# Early sklearn import to avoid shutdown timing issues
+try:
+    from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import classification_report
+    from sklearn.model_selection import cross_val_score, train_test_split
+    from sklearn.preprocessing import StandardScaler
+
+    SKLEARN_MODULES = {
+        "GradientBoostingClassifier": GradientBoostingClassifier,
+        "RandomForestClassifier": RandomForestClassifier,
+        "LogisticRegression": LogisticRegression,
+        "classification_report": classification_report,
+        "cross_val_score": cross_val_score,
+        "train_test_split": train_test_split,
+        "StandardScaler": StandardScaler,
+    }
+    SKLEARN_AVAILABLE = True
+except Exception as e:
+    print(f"Early sklearn import failed: {e}")
+    SKLEARN_MODULES = {}
+    SKLEARN_AVAILABLE = False
+
+# Legacy variables for backward compatibility
+_sklearn_modules = SKLEARN_MODULES
 
 
 def _get_sklearn_modules():
-    """Lazy import sklearn modules with error handling"""
-    global SKLEARN_AVAILABLE, _sklearn_modules
+    """Return pre-imported sklearn modules or raise error if not available"""
+    global SKLEARN_AVAILABLE, SKLEARN_MODULES
 
-    if SKLEARN_AVAILABLE is False:
-        return None
-
-    if SKLEARN_AVAILABLE is True:
-        return _sklearn_modules
-
-    try:
-        import sys
-        import threading
-
-        # Check if we're in shutdown
-        if (
-            hasattr(sys, "_called_from_test")
-            or threading.current_thread() != threading.main_thread()
-        ):
-            SKLEARN_AVAILABLE = False
-            return None
-
-        from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
-        from sklearn.linear_model import LogisticRegression
-        from sklearn.metrics import classification_report
-        from sklearn.model_selection import cross_val_score, train_test_split
-        from sklearn.preprocessing import StandardScaler
-
-        _sklearn_modules = {
-            "GradientBoostingClassifier": GradientBoostingClassifier,
-            "RandomForestClassifier": RandomForestClassifier,
-            "LogisticRegression": LogisticRegression,
-            "classification_report": classification_report,
-            "cross_val_score": cross_val_score,
-            "train_test_split": train_test_split,
-            "StandardScaler": StandardScaler,
-        }
-
-        SKLEARN_AVAILABLE = True
-        return _sklearn_modules
-
-    except (ImportError, RuntimeError) as e:
-        if "can't register atexit after shutdown" in str(e):
-            SKLEARN_AVAILABLE = False
-            return None
-        SKLEARN_AVAILABLE = False
-        return None
+    if SKLEARN_AVAILABLE:
+        return SKLEARN_MODULES
+    else:
+        raise RuntimeError(
+            "Sklearn modules are not available. This may be due to import issues during module loading. "
+            "Check that sklearn is properly installed and that the module is being imported in a clean state."
+        )
 
 
 # Create minimal fallbacks for pandas if not available
