@@ -26,7 +26,57 @@ try:
 except ImportError:
     PANDAS_AVAILABLE = False
 
-    # Create minimal fallbacks
+# Lazy sklearn imports - only import when needed
+SKLEARN_AVAILABLE = None
+_sklearn_modules = {}
+
+def _get_sklearn_modules():
+    """Lazy import sklearn modules with error handling"""
+    global SKLEARN_AVAILABLE, _sklearn_modules
+
+    if SKLEARN_AVAILABLE is False:
+        return None
+
+    if SKLEARN_AVAILABLE is True:
+        return _sklearn_modules
+
+    try:
+        import sys
+        import threading
+
+        # Check if we're in shutdown
+        if hasattr(sys, '_called_from_test') or threading.current_thread() != threading.main_thread():
+            SKLEARN_AVAILABLE = False
+            return None
+
+        from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.metrics import classification_report
+        from sklearn.model_selection import cross_val_score, train_test_split
+        from sklearn.preprocessing import StandardScaler
+
+        _sklearn_modules = {
+            'GradientBoostingClassifier': GradientBoostingClassifier,
+            'RandomForestClassifier': RandomForestClassifier,
+            'LogisticRegression': LogisticRegression,
+            'classification_report': classification_report,
+            'cross_val_score': cross_val_score,
+            'train_test_split': train_test_split,
+            'StandardScaler': StandardScaler
+        }
+
+        SKLEARN_AVAILABLE = True
+        return _sklearn_modules
+
+    except (ImportError, RuntimeError) as e:
+        if "can't register atexit after shutdown" in str(e):
+            SKLEARN_AVAILABLE = False
+            return None
+        SKLEARN_AVAILABLE = False
+        return None
+
+# Create minimal fallbacks for pandas if not available
+if not PANDAS_AVAILABLE:
     class pd:
         @staticmethod
         def DataFrame(data):
@@ -1691,17 +1741,19 @@ class AnalyticsEngine:
     ) -> Dict[str, Any]:
         """Enhanced ML-based lead scoring with comprehensive feature engineering"""
 
-        try:
-            import numpy as np
-            import pandas as pd
-            from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
-            from sklearn.linear_model import LogisticRegression
-            from sklearn.metrics import classification_report
-            from sklearn.model_selection import cross_val_score, train_test_split
-            from sklearn.preprocessing import StandardScaler
-        except ImportError:
+        sklearn_modules = _get_sklearn_modules()
+        if not sklearn_modules:
             # Fallback to simple scoring if sklearn not available
             return await self._simple_lead_scoring(contacts_data)
+
+        # Extract sklearn classes for use
+        GradientBoostingClassifier = sklearn_modules['GradientBoostingClassifier']
+        RandomForestClassifier = sklearn_modules['RandomForestClassifier']
+        LogisticRegression = sklearn_modules['LogisticRegression']
+        classification_report = sklearn_modules['classification_report']
+        cross_val_score = sklearn_modules['cross_val_score']
+        train_test_split = sklearn_modules['train_test_split']
+        StandardScaler = sklearn_modules['StandardScaler']
 
         if not contacts_data:
             return {
