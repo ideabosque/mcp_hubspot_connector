@@ -16,7 +16,12 @@ Main Components:
 """
 
 # Import from the main mcp_hubspot_connector module
-from .mcp_hubspot_connector import HubSpotSDKConfig, MCPHubspotConnector, handle_hubspot_errors
+from .mcp_hubspot_connector import (
+    MCP_CONFIGURATION,
+    HubSpotSDKConfig,
+    MCPHubspotConnector,
+    handle_hubspot_errors,
+)
 
 __version__ = "2.0.0"
 __author__ = "bibow"
@@ -31,6 +36,7 @@ __all__ = [
     "HubSpotSDKConfig",
     # Utilities
     "handle_hubspot_errors",
+    "MCP_CONFIGURATION",
     # Metadata
     "__version__",
     "__author__",

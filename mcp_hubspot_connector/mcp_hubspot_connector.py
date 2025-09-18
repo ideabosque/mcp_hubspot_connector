@@ -31,6 +31,530 @@ from .analytics_engine import AnalyticsEngine
 from .insight_generator import InsightGenerator
 from .rate_limiter import RateLimiter
 
+MCP_CONFIGURATION = {
+    "tools": [
+        {
+            "name": "get_contacts",
+            "description": "Get contacts from HubSpot",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "default": 100},
+                    "properties": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "default": [
+                            "email",
+                            "firstname",
+                            "lastname",
+                            "createdate",
+                            "lifecyclestage",
+                        ],
+                    },
+                },
+            },
+        },
+        {
+            "name": "create_contact",
+            "description": "Create a new contact in HubSpot",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "properties": {
+                        "type": "object",
+                        "description": "Contact properties",
+                        "properties": {
+                            "email": {"type": "string"},
+                            "firstname": {"type": "string"},
+                            "lastname": {"type": "string"},
+                        },
+                        "required": ["email", "firstname", "lastname"],
+                    }
+                },
+                "required": ["properties"],
+            },
+        },
+        {
+            "name": "update_contact",
+            "description": "Update an existing contact in HubSpot",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "contact_id": {"type": "string", "description": "Contact ID"},
+                    "properties": {
+                        "type": "object",
+                        "description": "Contact properties",
+                        "properties": {
+                            "firstname": {"type": "string"},
+                            "lastname": {"type": "string"},
+                        },
+                        "required": ["firstname", "lastname"],
+                    },
+                },
+                "required": ["contact_id", "properties"],
+            },
+        },
+        {
+            "name": "get_deals",
+            "description": "Get deals from HubSpot",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "default": 100},
+                    "properties": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "default": ["dealname", "amount", "dealstage", "createdate", "closedate"],
+                    },
+                },
+            },
+        },
+        {
+            "name": "create_deal",
+            "description": "Create a new deal in HubSpot",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "properties": {
+                        "type": "object",
+                        "description": "Deal properties",
+                        "properties": {
+                            "dealname": {"type": "string"},
+                            "amount": {"type": "string"},
+                            "dealstage": {"type": "string"},
+                        },
+                        "required": ["dealname", "amount", "dealstage"],
+                    }
+                },
+                "required": ["properties"],
+            },
+        },
+        {
+            "name": "get_companies",
+            "description": "Get companies from HubSpot",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "default": 100},
+                    "properties": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "default": ["name", "domain", "city", "state", "country", "createdate"],
+                    },
+                },
+            },
+        },
+        {
+            "name": "search_contacts",
+            "description": "Search contacts in HubSpot",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                    "limit": {"type": "integer", "default": 100},
+                    "properties": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "default": [
+                            "email",
+                            "firstname",
+                            "lastname",
+                            "createdate",
+                            "lifecyclestage",
+                        ],
+                    },
+                },
+            },
+        },
+        {
+            "name": "get_contact_by_email",
+            "description": "Get a specific contact by email address",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "email": {"type": "string", "description": "Email address"},
+                    "properties": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "default": [
+                            "email",
+                            "firstname",
+                            "lastname",
+                            "createdate",
+                            "lifecyclestage",
+                        ],
+                    },
+                },
+                "required": ["email"],
+            },
+        },
+        {
+            "name": "get_marketing_events",
+            "description": "Get marketing events from HubSpot",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"limit": {"type": "integer", "default": 100}},
+            },
+        },
+        {
+            "name": "get_contact_analytics",
+            "description": "Advanced contact analytics using HubSpot SDK",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "date_range": {
+                        "type": "object",
+                        "properties": {
+                            "start": {"type": "string", "description": "Start date in ISO format"},
+                            "end": {"type": "string", "description": "End date in ISO format"},
+                        },
+                    },
+                    "segmentation": {
+                        "type": "string",
+                        "description": "Segmentation type",
+                        "default": "all",
+                    },
+                    "include_engagement": {
+                        "type": "boolean",
+                        "description": "Include engagement data",
+                        "default": True,
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of contacts",
+                        "default": 1000,
+                    },
+                    "mcp_function_call_uuid": {
+                        "type": "string",
+                        "description": "MCP Function Call UUID",
+                    },
+                },
+            },
+        },
+        {
+            "name": "analyze_campaign_performance",
+            "description": "Campaign analytics using HubSpot SDK",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "campaign_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of campaign IDs",
+                    },
+                    "metrics": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Metrics to analyze",
+                        "default": ["open_rate", "click_rate", "conversion_rate"],
+                    },
+                    "benchmark_type": {
+                        "type": "string",
+                        "description": "Benchmark type",
+                        "default": "historical",
+                    },
+                    "include_recommendations": {
+                        "type": "boolean",
+                        "description": "Include recommendations",
+                        "default": True,
+                    },
+                    "date_range": {
+                        "type": "object",
+                        "properties": {"start": {"type": "string"}, "end": {"type": "string"}},
+                    },
+                    "mcp_function_call_uuid": {
+                        "type": "string",
+                        "description": "MCP Function Call UUID",
+                    },
+                },
+            },
+        },
+        {
+            "name": "analyze_sales_pipeline",
+            "description": "Sales pipeline analytics using HubSpot SDK",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "pipeline_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Pipeline IDs to analyze",
+                    },
+                    "timeframe": {
+                        "type": "object",
+                        "properties": {"start": {"type": "string"}, "end": {"type": "string"}},
+                    },
+                    "analysis_type": {
+                        "type": "string",
+                        "description": "Analysis type",
+                        "default": "conversion_rates",
+                    },
+                    "include_recommendations": {"type": "boolean", "default": True},
+                    "mcp_function_call_uuid": {
+                        "type": "string",
+                        "description": "MCP Function Call UUID",
+                    },
+                },
+            },
+        },
+        {
+            "name": "predict_lead_scores",
+            "description": "ML-based lead scoring using HubSpot SDK",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "contact_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Contact IDs to score",
+                    },
+                    "model_type": {
+                        "type": "string",
+                        "description": "Model type",
+                        "default": "conversion_probability",
+                    },
+                    "include_feature_importance": {"type": "boolean", "default": True},
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of contacts",
+                        "default": 100,
+                    },
+                    "date_range": {
+                        "type": "object",
+                        "properties": {"start": {"type": "string"}, "end": {"type": "string"}},
+                    },
+                    "mcp_function_call_uuid": {
+                        "description": "MCP Function Call UUID",
+                        "type": "string",
+                    },
+                },
+            },
+        },
+        {
+            "name": "create_contact_segments",
+            "description": "Advanced behavioral segmentation",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "segmentation_type": {
+                        "type": "string",
+                        "description": "Segmentation type",
+                        "default": "behavioral",
+                    },
+                    "criteria": {"type": "object", "description": "Segmentation criteria"},
+                    "number_of_segments": {
+                        "type": "integer",
+                        "description": "Number of segments",
+                        "default": 5,
+                    },
+                    "mcp_function_call_uuid": {
+                        "description": "MCP Function Call UUID",
+                        "type": "string",
+                    },
+                },
+            },
+        },
+        {
+            "name": "forecast_revenue",
+            "description": "AI-powered revenue predictions",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "forecast_period": {
+                        "type": "string",
+                        "description": "Forecast period",
+                        "default": "90_days",
+                    },
+                    "confidence_level": {
+                        "type": "number",
+                        "description": "Confidence level",
+                        "default": 0.95,
+                    },
+                    "mcp_function_call_uuid": {
+                        "description": "MCP Function Call UUID",
+                        "type": "string",
+                    },
+                },
+            },
+        },
+        {
+            "name": "generate_executive_report",
+            "description": "Comprehensive executive reporting",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "report_type": {
+                        "type": "string",
+                        "description": "Report type",
+                        "default": "monthly",
+                    },
+                    "timeframe": {
+                        "type": "object",
+                        "properties": {"start": {"type": "string"}, "end": {"type": "string"}},
+                    },
+                    "include_forecast": {"type": "boolean", "default": True},
+                    "mcp_function_call_uuid": {
+                        "description": "MCP Function Call UUID",
+                        "type": "string",
+                    },
+                },
+            },
+        },
+    ],
+    "module_links": [
+        {
+            "type": "tool",
+            "name": "get_contacts",
+            "module_name": "mcp_hubspot_connector",
+            "class_name": "MCPHubspotConnector",
+            "function_name": "get_contacts",
+            "return_type": "text",
+        },
+        {
+            "type": "tool",
+            "name": "create_contact",
+            "module_name": "mcp_hubspot_connector",
+            "class_name": "MCPHubspotConnector",
+            "function_name": "create_contact",
+            "return_type": "text",
+        },
+        {
+            "type": "tool",
+            "name": "update_contact",
+            "module_name": "mcp_hubspot_connector",
+            "class_name": "MCPHubspotConnector",
+            "function_name": "update_contact",
+            "return_type": "text",
+        },
+        {
+            "type": "tool",
+            "name": "get_deals",
+            "module_name": "mcp_hubspot_connector",
+            "class_name": "MCPHubspotConnector",
+            "function_name": "get_deals",
+            "return_type": "text",
+        },
+        {
+            "type": "tool",
+            "name": "create_deal",
+            "module_name": "mcp_hubspot_connector",
+            "class_name": "MCPHubspotConnector",
+            "function_name": "create_deal",
+            "return_type": "text",
+        },
+        {
+            "type": "tool",
+            "name": "get_companies",
+            "module_name": "mcp_hubspot_connector",
+            "class_name": "MCPHubspotConnector",
+            "function_name": "get_companies",
+            "return_type": "text",
+        },
+        {
+            "type": "tool",
+            "name": "search_contacts",
+            "module_name": "mcp_hubspot_connector",
+            "class_name": "MCPHubspotConnector",
+            "function_name": "search_contacts",
+            "return_type": "text",
+        },
+        {
+            "type": "tool",
+            "name": "get_contact_by_email",
+            "module_name": "mcp_hubspot_connector",
+            "class_name": "MCPHubspotConnector",
+            "function_name": "get_contact_by_email",
+            "return_type": "text",
+        },
+        {
+            "type": "tool",
+            "name": "get_marketing_events",
+            "module_name": "mcp_hubspot_connector",
+            "class_name": "MCPHubspotConnector",
+            "function_name": "get_marketing_events",
+            "return_type": "text",
+        },
+        {
+            "type": "tool",
+            "name": "get_contact_analytics",
+            "module_name": "mcp_hubspot_connector",
+            "class_name": "MCPHubspotConnector",
+            "function_name": "get_contact_analytics",
+            "return_type": "text",
+            "is_async": True,
+        },
+        {
+            "type": "tool",
+            "name": "analyze_campaign_performance",
+            "module_name": "mcp_hubspot_connector",
+            "class_name": "MCPHubspotConnector",
+            "function_name": "analyze_campaign_performance",
+            "return_type": "text",
+            "is_async": True,
+        },
+        {
+            "type": "tool",
+            "name": "analyze_sales_pipeline",
+            "module_name": "mcp_hubspot_connector",
+            "class_name": "MCPHubspotConnector",
+            "function_name": "analyze_sales_pipeline",
+            "return_type": "text",
+            "is_async": True,
+        },
+        {
+            "type": "tool",
+            "name": "predict_lead_scores",
+            "module_name": "mcp_hubspot_connector",
+            "class_name": "MCPHubspotConnector",
+            "function_name": "predict_lead_scores",
+            "return_type": "text",
+            "is_async": True,
+        },
+        {
+            "type": "tool",
+            "name": "create_contact_segments",
+            "module_name": "mcp_hubspot_connector",
+            "class_name": "MCPHubspotConnector",
+            "function_name": "create_contact_segments",
+            "return_type": "text",
+            "is_async": True,
+        },
+        {
+            "type": "tool",
+            "name": "forecast_revenue",
+            "module_name": "mcp_hubspot_connector",
+            "class_name": "MCPHubspotConnector",
+            "function_name": "forecast_revenue",
+            "return_type": "text",
+            "is_async": True,
+        },
+        {
+            "type": "tool",
+            "name": "generate_executive_report",
+            "module_name": "mcp_hubspot_connector",
+            "class_name": "MCPHubspotConnector",
+            "function_name": "generate_executive_report",
+            "return_type": "text",
+            "is_async": True,
+        },
+    ],
+    "modules": [
+        {
+            "package_name": "mcp_hubspot_connector",
+            "module_name": "mcp_hubspot_connector",
+            "class_name": "MCPHubspotConnector",
+            "setting": {
+                "hubspot_access_token": "<hubspot_access_token>",
+                "rate_limit_enabled": True,
+                "max_retries": 3,
+                "timeout": 30,
+                "debug_mode": False,
+                "calls_per_second": 10,
+            },
+        }
+    ],
+}
+
 
 @dataclass
 class HubSpotSDKConfig:
