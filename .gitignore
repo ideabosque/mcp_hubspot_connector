@@ -210,4 +210,4 @@ __marimo__/
 .claude/
 
 # Tests directory (keep local files but exclude from git)
-mcp_hubspot_connector/tests/
+tests/
