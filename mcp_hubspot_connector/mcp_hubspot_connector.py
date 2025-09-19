@@ -792,6 +792,120 @@ class MCPHubspotConnector:
 
         return all_results
 
+    def _paginated_api_fetch_sync(
+        self,
+        api_client,
+        properties: List[str],
+        limit: int = 100,
+        max_limit: int = None,
+        transform_func=None,
+    ) -> List[Any]:
+        """Unified method for paginated API data retrieval (synchronous version)"""
+        all_results = []
+        after = None
+        total_fetched = 0
+        max_items = max_limit or limit
+
+        while total_fetched < max_items:
+            # Calculate batch size
+            remaining = max_items - total_fetched
+            batch_limit = min(100, remaining)
+
+            # API call
+            response = api_client.basic_api.get_page(
+                limit=batch_limit, after=after, properties=properties, archived=False
+            )
+
+            if response and response.results:
+                # Apply transformation if provided, otherwise use raw results
+                if transform_func:
+                    for item in response.results:
+                        if total_fetched >= max_items:
+                            break
+                        transformed_item = transform_func(item)
+                        all_results.append(transformed_item)
+                        total_fetched += 1
+                else:
+                    all_results.extend(response.results)
+                    total_fetched += len(response.results)
+
+                self.logger.info(f"Fetched {len(response.results)} items, total: {total_fetched}")
+
+            # Check for pagination
+            if (
+                hasattr(response, "paging")
+                and response.paging
+                and hasattr(response.paging, "next")
+                and response.paging.next
+                and total_fetched < max_items
+            ):
+                after = response.paging.next.after
+            else:
+                break
+
+        return all_results
+
+    def _paginated_search_fetch_sync(
+        self,
+        api_client,
+        filters: List[Dict],
+        properties: List[str],
+        limit: int = 100,
+        max_limit: int = None,
+        transform_func=None,
+    ) -> List[Any]:
+        """Unified method for paginated search API data retrieval (synchronous version)"""
+        all_results = []
+        after = None
+        total_fetched = 0
+        max_items = max_limit or limit
+
+        while total_fetched < max_items:
+            # Calculate batch size
+            remaining = max_items - total_fetched
+            batch_limit = min(100, remaining)
+
+            # Create search request
+            search_request = PublicObjectSearchRequest(
+                filter_groups=[{"filters": filters}],
+                properties=properties,
+                limit=batch_limit,
+                after=after,
+            )
+
+            # API call
+            search_response = api_client.search_api.do_search(search_request)
+
+            if search_response and search_response.results:
+                # Apply transformation if provided, otherwise use raw results
+                if transform_func:
+                    for item in search_response.results:
+                        if total_fetched >= max_items:
+                            break
+                        transformed_item = transform_func(item)
+                        all_results.append(transformed_item)
+                        total_fetched += 1
+                else:
+                    all_results.extend(search_response.results)
+                    total_fetched += len(search_response.results)
+
+                self.logger.info(
+                    f"Search fetched {len(search_response.results)} items, total: {total_fetched}"
+                )
+
+            # Check for pagination
+            if (
+                search_response
+                and search_response.paging
+                and search_response.paging.next
+                and total_fetched < max_items
+            ):
+                after = search_response.paging.next.after
+            else:
+                break
+
+        return all_results
+
     # * MCP Function.
     @handle_hubspot_errors
     async def get_contact_analytics(self, **arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -1015,10 +1129,8 @@ class MCPHubspotConnector:
                 return {"id": contact.id, "properties": contact.properties}
 
             # Run async method within sync context
-            contacts = asyncio.run(
-                self._paginated_api_fetch(
-                    client.crm.contacts, properties, limit, transform_func=transform_contact
-                )
+            contacts = self._paginated_api_fetch_sync(
+                client.crm.contacts, properties, limit, transform_func=transform_contact
             )
 
             return {"total": len(contacts), "contacts": contacts}
@@ -1106,10 +1218,8 @@ class MCPHubspotConnector:
                 return {"id": deal.id, "properties": deal.properties}
 
             # Run async method within sync context
-            deals = asyncio.run(
-                self._paginated_api_fetch(
-                    client.crm.deals, properties, limit, transform_func=transform_deal
-                )
+            deals = self._paginated_api_fetch_sync(
+                client.crm.deals, properties, limit, transform_func=transform_deal
             )
 
             return {"total": len(deals), "deals": deals}
@@ -1168,10 +1278,8 @@ class MCPHubspotConnector:
                 return {"id": company.id, "properties": company.properties}
 
             # Run async method within sync context
-            companies = asyncio.run(
-                self._paginated_api_fetch(
-                    client.crm.companies, properties, limit, transform_func=transform_company
-                )
+            companies = self._paginated_api_fetch_sync(
+                client.crm.companies, properties, limit, transform_func=transform_company
             )
 
             return {"total": len(companies), "companies": companies}
@@ -1206,14 +1314,12 @@ class MCPHubspotConnector:
             def transform_contact(contact):
                 return {"id": contact.id, "properties": contact.properties}
 
-            contacts = asyncio.run(
-                self._paginated_search_fetch(
-                    client.crm.contacts,
-                    filters,
-                    properties,
-                    limit,
-                    transform_func=transform_contact,
-                )
+            contacts = self._paginated_search_fetch_sync(
+                client.crm.contacts,
+                filters,
+                properties,
+                limit,
+                transform_func=transform_contact,
             )
 
             return {"total": len(contacts), "contacts": contacts, "query": query}
@@ -1248,8 +1354,8 @@ class MCPHubspotConnector:
             filters = [{"propertyName": "email", "operator": "EQ", "value": email}]
 
             # Use unified search for single result
-            results = asyncio.run(
-                self._paginated_search_fetch(client.crm.contacts, filters, properties, limit=1)
+            results = self._paginated_search_fetch_sync(
+                client.crm.contacts, filters, properties, limit=1
             )
 
             if results:

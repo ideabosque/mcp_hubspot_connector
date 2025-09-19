@@ -12,13 +12,12 @@ authors = [
 maintainers = [
     {name = "IdeaBosque", email = "ideabosque@gmail.com"}
 ]
-license = {text = "MIT"}
+license = "MIT"
 readme = "README.md"
 keywords = ["hubspot", "crm", "connector", "mcp", "api"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
@@ -34,6 +33,10 @@ requires-python = ">=3.8"
 dependencies = [
     "hubspot-api-client>=12.0.0",
     "python-dotenv>=0.19.0",
+    "prophet>=1.1.0",
+    "scikit-learn>=1.0.0",
+    "numpy<=1.26.0",
+    "pandas>=1.3.0",
 ]
 
 [project.optional-dependencies]
@@ -63,8 +66,7 @@ Documentation = "https://github.com/bibow/mcp_hubspot_connector#readme"
 [tool.setuptools]
 packages = ["mcp_hubspot_connector"]
 
-[tool.setuptools.package-dir]
-mcp_hubspot_connector = "mcp_hubspot_connector/mcp_hubspot_connector"
+
 
 [tool.pytest.ini_options]
 minversion = "6.0"
